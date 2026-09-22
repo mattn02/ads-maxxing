@@ -1,3 +1,4 @@
+import type { BrandTokens, VisualAsset } from "./creative/schema";
 import type { UIMessage } from "ai";
 import type { BriefInput, Findings, VisualReview } from "./schema";
 import type { Generation, Product } from "./types";
@@ -20,6 +21,8 @@ export type Brief = BriefInput & {
   researchId: string;
   approvedAt?: string;
   generationAttemptedAt?: string;
+  tokens?: BrandTokens;
+  visualCheckpoint?: VisualAsset;
 };
 export type CodeCheck = { name: string; passed: boolean; detail: string };
 export type Review = {

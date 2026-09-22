@@ -1,2 +1,19 @@
+import type { BrandTokens, DesignSpec, VisualAsset } from "./creative/schema";
+
 export type Product = { url: string; title: string; description: string; images: string[]; markdown: string };
-export type Generation = { id: string; imageUrl: string; model: string; prompt: string; referenceImage: string; createdAt: string };
+export type Generation = {
+  id: string;
+  /** The final composed PNG, never an intermediate provider URL. */
+  imageUrl: string;
+  model: string;
+  prompt: string;
+  referenceImage: string;
+  createdAt: string;
+  // Optional only for legacy, full-image generations.
+  visualAssetId?: string;
+  visualAsset?: VisualAsset;
+  design?: DesignSpec;
+  tokens?: BrandTokens;
+  rendererVersion?: number;
+  renderedCopy?: { headline: string; cta: string; offer: string | null };
+};
