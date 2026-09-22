@@ -1,16 +1,13 @@
 import { productResearch } from "./research-fixture";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { DEFAULT_DESIGN } from "../lib/workflow/creative/schema";
 import { Workflow, type WorkflowDependencies } from "../lib/workflow/service";
 import { assembleResearch } from "../lib/workflow/agents/researcher";
+import { backgroundPrompt } from "../lib/workflow/creative/background";
 import { artistPrompt } from "../lib/workflow/agents/artist";
 import { codeChecks, reviewVerdict } from "../lib/workflow/agents/reviewer";
-import { createSession, loadSession, lockSession, saveSession, listSessions } from "../lib/workflow/sessions";
 import type { Research, Session, Source, Variant } from "../lib/workflow/session-types";
 import { researchInputSchema, findingsSchema, type BriefInput, type VisualReview } from "../lib/workflow/schema";
 import { normalizeMessages } from "../lib/workflow/messages";
@@ -18,9 +15,8 @@ import { conciergeText } from "../lib/workflow/concierge-stream";
 import { safeError } from "../lib/workflow/validation";
 import { structuredResult } from "../lib/workflow/structured-result";
 import type { UIMessage } from "ai";
-import { generateImage } from "../lib/workflow/fal";
+import { generateBackground, generateScene } from "../lib/workflow/fal";
 import { scrapePage } from "../lib/workflow/firecrawl";
-import { readImage, saveGeneration } from "../lib/workflow/storage";
 
 const source: Source = { url: "https://store.example/products/case", title: "Real case", description: "A red case", images: ["https://store.example/case.png"], markdown: "Members get 10% off red cases through Friday.", colors: { primary: "#ff0000" }, fetchedAt: new Date().toISOString() };
 const makeResearch = (): Research => productResearch(structuredClone(source));
@@ -32,7 +28,8 @@ function fixture(overrides: Partial<WorkflowDependencies> = {}) {
   let generations = 0;
   const workflow = new Workflow(session, {
     research: async () => makeResearch(), save: async () => {}, readVisual: async () => null,
-    createAd: async current => { generations++; return { id: randomUUID(), imageUrl: "/api/outputs/test", model: "test", prompt: artistPrompt(current), referenceImage: current.referenceImage, createdAt: "now" }; },
+    pinSourceAsset: async () => "source-fixture", readAsset: async () => Buffer.from("source"),
+    createAd: async (current, _research, execution) => { await execution!.beforeAttempt("background"); generations++; return { id: randomUUID(), imageUrl: "/api/outputs/test", model: "test", prompt: `${backgroundPrompt(current)}\n${artistPrompt(current)}`, referenceImage: current.referenceImage, createdAt: "now" }; },
     reviewAd: async () => ({ verdict: "pass", visual, checks: [], createdAt: "now" }), ...overrides,
   });
   return { workflow, session, generationCount: () => generations };
@@ -117,7 +114,7 @@ test("one approved revision generates once; feedback changes the next prompt and
   assert.equal(output.status, "reviewed");
   assert.equal((await workflow.generate()).id, output.id);
   assert.equal(generationCount(), 1);
-  const next = await workflow.proposeBrief({ ...brief, feedback: "Use a cream background", direction: "Cream background", design: { ...DEFAULT_DESIGN, visualDirection: "Use a cream background" }, parentVariantId: output.id });
+  const next = await workflow.proposeBrief({ ...brief, feedback: "Use a cream background", direction: "Cream background", design: { ...DEFAULT_DESIGN, background: { direction: "Use a cream background" } }, parentVariantId: output.id });
   await assert.rejects(workflow.generate(), /Approve/);
   await workflow.approveBrief(next.id);
   const second = await workflow.generate();
@@ -147,7 +144,8 @@ test("review failure retains image; retrying review never regenerates", async ()
 
 test("failed generation is marked before calling fal and cannot automatically retry", async () => {
   let calls = 0;
-  const { workflow, session } = fixture({ createAd: async () => {
+  const { workflow, session } = fixture({ createAd: async (_brief, _research, execution) => {
+    await execution!.beforeAttempt("background");
     assert.ok(session.brief?.generationAttemptedAt);
     calls++;
     throw new Error("timeout");
@@ -191,53 +189,32 @@ test("review combines code and visual results; uncertainty never passes", async 
   assert.equal(reviewVerdict(codeChecks(variant, png), visual), "needs_changes");
 });
 
-test("atomic session persistence reloads history and preferences; locks reject concurrent turns", async () => {
-  const dir = await mkdtemp(path.join(tmpdir(), "ad-workflow-test-"));
-  process.env.WORKFLOW_DATA_DIR = dir;
-  try {
-    const session = await createSession();
-    session.preferences.tone = "Friendly";
-    session.messages.push({ id: "user1", role: "user", parts: [{ type: "text", text: "Remember friendly copy" }] });
-    await saveSession(session);
-    assert.deepEqual((await loadSession(session.id)).messages, session.messages);
-    assert.equal((await loadSession(session.id)).preferences.tone, "Friendly");
-    assert.equal((await listSessions()).length, 1);
-    assert.equal((await readdir(path.join(dir, "sessions"))).filter(name => name.endsWith(".tmp")).length, 0);
-    const release = lockSession(session.id);
-    assert.throws(() => lockSession(session.id), /busy/);
-    release(); lockSession(session.id)();
-    await assert.rejects(loadSession("../../etc/passwd"), /Invalid/);
-  } finally { delete process.env.WORKFLOW_DATA_DIR; await rm(dir, { recursive: true, force: true }); }
-});
+// Real transactional ownership, leases, immutable snapshots, and reloads are exercised
+// by scripts/verify-persistence-sql.mjs and tests/persistence.test.ts.
 
-test("provider adapters forward real photo, use a square visual, request branding and save a local PNG", async t => {
-  const dir = await mkdtemp(path.join(tmpdir(), "ad-adapter-test-"));
-  process.env.WORKFLOW_DATA_DIR = dir;
+test("provider adapters forward pinned source and background, use portrait geometry and request branding", async t => {
   process.env.FAL_AI_API_KEY = "fixture";
   process.env.FIRECRAWL_API_KEY = "fixture";
-  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCfkAAAAASUVORK5CYII=", "base64");
   t.mock.method(globalThis, "fetch", async (url: string | URL, init?: RequestInit) => {
     if (String(url).includes("firecrawl.dev")) {
       const body = JSON.parse(init!.body as string);
-      assert.ok(body.formats.includes("branding")); assert.equal(body.maxAge, 0); assert.equal(body.onlyMainContent, false);
+      assert.ok(body.formats.includes("branding")); assert.ok(body.formats.includes("rawHtml")); assert.equal(body.maxAge, 0); assert.equal(body.onlyMainContent, false);
       return Response.json({ success: true, data: { markdown: source.markdown, images: ["/case.png"], branding: { colors: source.colors }, metadata: { statusCode: 200, title: source.title } } });
     }
-    if (String(url).includes("fal.run")) {
-      const body = JSON.parse(init!.body as string);
-      assert.deepEqual(body.image_urls, [source.images[0]]);
-      assert.deepEqual(body.image_size, { width: 576, height: 576 }); assert.equal(body.num_images, 1);
-      return Response.json({ images: [{ url: "https://fal.media/fixture.png" }] });
-    }
-    return new Response(png);
+    const body = JSON.parse(init!.body as string);
+    if (body.image_urls) {
+      assert.deepEqual(body.image_urls, [source.images[0], "https://saved.example/background.png"]);
+      assert.equal(body.aspect_ratio, "9:16");
+    } else assert.deepEqual(body.image_size, { width: 576, height: 1024 });
+    assert.equal(body.num_images, 1);
+    return Response.json({ images: [{ url: "https://fal.media/fixture.png" }] });
   });
   try {
     assert.deepEqual((await scrapePage(source.url, true)).images, source.images);
-    const generated = await generateImage(source.images[0], "Fixture ad");
-    const saved = await saveGeneration({ ...generated, referenceImage: source.images[0], productUrl: source.url, prompt: "Fixture ad" });
-    assert.deepEqual(await readImage(saved.id), png);
-    assert.match(await readFile(path.join(dir, `${saved.id}.json`), "utf8"), /providerImageUrl/);
-    assert.equal(await readImage("../secret"), null);
-  } finally { t.mock.restoreAll(); delete process.env.WORKFLOW_DATA_DIR; delete process.env.FAL_AI_API_KEY; delete process.env.FIRECRAWL_API_KEY; await rm(dir, { recursive: true, force: true }); }
+    await generateBackground("Fixture background");
+    const generated = await generateScene(source.images[0], "https://saved.example/background.png", "Fixture ad");
+    assert.equal(generated.imageUrl, "https://fal.media/fixture.png");
+  } finally { t.mock.restoreAll(); delete process.env.FAL_AI_API_KEY; delete process.env.FIRECRAWL_API_KEY; }
 });
 
 test("real AI SDK loop streams research and brief tool results, pauses for approval, and resumes generation", async () => {
@@ -380,4 +357,28 @@ test("structured findings use function tools instead of provider JSON-schema for
   assert.deepEqual(await structuredResult({ model, schema: findingsSchema, instructions: "Return findings.", messages: [{ role: "user", content: "A friendly phone store." }] }), findings);
   assert.notEqual(model.doGenerateCalls[0].responseFormat?.type, "json");
   assert.deepEqual(model.doGenerateCalls[0].toolChoice, { type: "tool", toolName: "submitResult" });
+});
+
+test("concierge tool payloads omit provider recovery URLs and failed research never claims completion", async () => {
+  const { createConcierge } = await import("../lib/workflow/agents/concierge");
+  const { MockLanguageModelV4 } = await import("ai/test");
+  const { WorkflowError } = await import("../lib/workflow/validation");
+  const { workflow, session } = fixture();
+  const saved = await draft(workflow); await workflow.approveBrief(saved.id);
+  const secret = "https://fal.media/private-provider-recovery";
+  workflow.generate = async () => ({ id: "generated", imageUrl: "/api/outputs/generated", createdAt: "now", referenceImage: source.images[0], model: "fixture", prompt: "fixture", status: "reviewed", research: session.research!, brief: { ...session.brief!, backgroundCheckpoint: { state: "output_pending_storage", provider: { imageUrl: secret, model: "fixture" } } } });
+  const agent = createConcierge(workflow, new MockLanguageModelV4());
+  const output = await agent.tools.generateAd.execute!({}, { toolCallId: "generate", messages: [], context: undefined });
+  assert.doesNotMatch(JSON.stringify(output), /private-provider-recovery|backgroundCheckpoint|research/);
+  assert.match(JSON.stringify(output), /api\/outputs\/generated/);
+  const failed = fixture({ research: async (_input, options) => {
+    const partial = makeResearch(); partial.campaign!.status = "awaiting_direction";
+    await options?.checkpoint?.(partial);
+    throw new WorkflowError("Final research persistence failed.");
+  } });
+  const failedAgent = createConcierge(failed.workflow, new MockLanguageModelV4());
+  await failedAgent.tools.research.execute!({ url: source.url, productUrl: null, campaignUrl: null }, { toolCallId: "research", messages: [], context: undefined });
+  assert.equal(failed.session.researchState?.stage, "awaiting_direction");
+  assert.match(failedAgent.responseText("Research saved."), /persistence failed/);
+  assert.doesNotMatch(failedAgent.responseText("Research saved."), /Brand research is saved/);
 });
