@@ -9,6 +9,7 @@ const {PGlite}=await import(pathToFileURL(modulePath).href);
 const db=new PGlite();
 await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(bucket_id text,name text);create function storage.foldername(text) returns text[] language sql as $$select string_to_array($1,'/')$$;grant usage on schema public,auth to authenticated;`);
 await db.exec(await readFile(new URL('../supabase/migrations/202609220001_workflow.sql',import.meta.url),'utf8'));
+await db.exec(await readFile(new URL('../supabase/migrations/202609220002_preserve_shared_brand_kit.sql',import.meta.url),'utf8'));
 const owner=randomUUID(),other=randomUUID(),campaign=randomUUID();
 await db.query('insert into auth.users values($1),($2)',[owner,other]);
 const call=async(name,args)=> (await db.query(`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args)).rows[0].result;
@@ -55,12 +56,19 @@ await save();
 const reuse=(await db.query('select background_asset_id,scene_asset_id from ad_versions where id=$1',[session.brief.id])).rows[0];assert.equal(reuse.background_asset_id,bg);assert.equal(reuse.scene_asset_id,scene);
 delete session.brief;session.preferences={tone:'New direction'};session.research={...research,id:randomUUID()};await save();
 assert.ok((await db.query('select approved_at from ad_versions where id=$1',[variant.id])).rows[0].approved_at);
+// An older campaign message/review save must not undo newer owner-level brand corrections.
+session.research={...session.research,id:randomUUID(),brandKit:{name:'First kit',overrides:{voice:'First'}}};await save();
+const otherCampaign=randomUUID();await call('create_campaign',[owner,otherCampaign]);const otherLease=await call('claim_campaign',[owner,otherCampaign]);
+const newerResearch={...session.research,id:randomUUID(),brandKit:{name:'Updated kit',overrides:{voice:'Newest user correction'}}};
+await call('commit_campaign',[owner,otherCampaign,otherLease.token,otherLease.revision,{id:otherCampaign,messages:[],events:[],preferences:{},variants:[],research:newerResearch},'loopycases.com',1]);
+session.messages=[{id:'older-chat',role:'user',parts:[{type:'text',text:'Review my old ad'}]}];await save();
+assert.equal((await db.query('select brand_kit from brands where id=$1',[result.brand_id])).rows[0].brand_kit.overrides.voice,'Newest user correction');
 // RLS and protected mutation privileges must work for the real authenticated role.
 await db.query("select set_config('request.jwt.claim.sub',$1,false)",[other]);await db.exec('set role authenticated');
 assert.equal((await db.query('select * from campaigns')).rows.length,0);
 await assert.rejects(db.query("update campaigns set preferences='{}'"),/permission denied/);
 await assert.rejects(call('claim_campaign',[owner,campaign]),/permission denied/);
 await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[owner]);await db.exec('set role authenticated');
-assert.equal((await db.query('select * from campaigns')).rows.length,1);
+assert.equal((await db.query('select * from campaigns')).rows.length,2);
 await db.exec('reset role');await db.close();
 console.log('PASS: migration, immutable snapshots/content/assets, owner isolation/RLS, forbidden client writes/RPCs, atomic claims, stale writers, paid-attempt preservation. Hosted Storage/Auth remain separate live checks.');
