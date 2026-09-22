@@ -24,7 +24,9 @@ export async function POST(request: Request) {
     const session = await loadSession(id);
     // The server owns history. Clients cannot inject assistant messages or approval state.
     if (session.messages.some(item => item.id === message.id)) throw new WorkflowError("This message was already submitted. Reload the session before trying again.", 409);
-    const agent = createConcierge(new Workflow(session));
+    const workflow = new Workflow(session);
+    workflow.setUserInput(message.parts[0].text, message.id);
+    const agent = createConcierge(workflow);
     delete session.lastError;
     session.messages.push(message);
     await saveSession(session);

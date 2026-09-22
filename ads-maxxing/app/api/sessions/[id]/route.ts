@@ -1,6 +1,7 @@
 import { authenticated } from "@/lib/supabase/server";
 import { publicSession } from "@/lib/workflow/public-session";
 import { z } from "zod";
+import { assetSchema } from "@/lib/workflow/research/contracts";
 import { briefSchema } from "@/lib/workflow/schema";
 import { Workflow } from "@/lib/workflow/service";
 import { loadSession, lockSession } from "@/lib/workflow/sessions";
@@ -9,6 +10,10 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 type Context = { params: Promise<{ id: string }> };
 const actionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("confirmOffer"), offerId: z.string(), productId: z.string() }),
+  z.object({ action: z.literal("selectProduct"), productId: z.string() }),
+  z.object({ action: z.literal("correctAsset"), assetId: z.string(), role: assetSchema.shape.role, productId: z.string().optional() }),
+  z.object({ action: z.literal("correctBrand"), field: z.enum(["voice", "audience", "valueProposition"]), value: z.string().trim().min(1).max(2000) }),
   z.object({ action: z.literal("approveBrief"), briefId: z.string() }),
   z.object({ action: z.literal("generateAd"), briefId: z.string().min(1) }),
   z.object({ action: z.literal("reviseBrief"), brief: briefSchema }),
@@ -29,6 +34,10 @@ export async function POST(request: Request, { params }: Context) {
     const workflow = new Workflow(await loadSession(id));
     const action = parsed.data;
     switch (action.action) {
+      case "confirmOffer": await workflow.confirmOffer(action.offerId, action.productId); break;
+      case "selectProduct": await workflow.selectProduct(action.productId); break;
+      case "correctAsset": await workflow.correctAsset(action.assetId, action.role, action.productId); break;
+      case "correctBrand": await workflow.correctBrand(action.field, action.value); break;
       case "approveBrief": await workflow.approveBrief(action.briefId); break;
       case "generateAd": await workflow.generate(action.briefId); break;
       case "reviseBrief": await workflow.proposeBrief(action.brief); break;

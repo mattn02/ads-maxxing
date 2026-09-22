@@ -1,0 +1,124 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { research } from "../lib/workflow/agents/researcher";
+import { normalizeScrape } from "../lib/workflow/firecrawl";
+import { extractSource, assetKey, canonicalUrl, pageHint } from "../lib/workflow/research/extract";
+import { userResearchIntent } from "../lib/workflow/research/intent";
+import { parseResearchSnapshot } from "../lib/workflow/research/persistence-schema";
+import { groundBrief } from "../lib/workflow/research/grounding";
+import { Workflow, type WorkflowDependencies } from "../lib/workflow/service";
+import type { Session, Source } from "../lib/workflow/session-types";
+import { productResearch } from "./research-fixture";
+
+const home = "https://store.example/";
+const productUrl = `${home}products/case`;
+const photo = `${home}cdn/case.jpg?v=4&width=800`;
+const source = (url = home, node?: object): Source => ({ url, title: "Fixture", description: "Useful cases", markdown: "20% off selected styles for first orders.", fetchedAt: new Date().toISOString(), colors: { background: "#ffffff", primary: "#336699" }, images: [photo, `${home}logo.png`, `${home}shipping.svg`], links: [`${home}pages/about`, productUrl, `${home}collections/summer`], branding: { images: { logo: `${home}logo.png` }, typography: { fontFamilies: { heading: "Example Sans" } } }, rawHtml: node ? `<script type="application/ld+json">${JSON.stringify(node)}</script>` : "" });
+const node = { "@type": "Product", name: "Case", url: productUrl, image: [photo], sku: "case-1", offers: { price: "29", priceCurrency: "USD" }, aggregateRating: { ratingValue: "4.8", ratingCount: 40, reviewCount: 12 } };
+const deps = (calls: string[]) => ({ scrape: async (url: string) => { calls.push(url); return source(url, url === productUrl ? node : undefined); }, discover: async () => [], synthesize: async () => ({ voice: "Friendly", audience: "Phone owners", sales: [] }), now: Date.now });
+const input = (url = home) => ({ url, productUrl: null, campaignUrl: null });
+const brief = (result: ReturnType<typeof productResearch>) => ({ productId: result.products![0].id, referenceAssetId: result.assets!.find(asset => asset.eligibleAsProductReference)!.id, productUrl, referenceImage: photo, headline: "Better grip", cta: "Shop now", direction: "Evergreen", saleId: null, parentVariantId: null, feedback: "" });
+function workflowFixture() {
+  const session: Session = { id: "test", createdAt: "now", updatedAt: "now", messages: [], events: [], preferences: {}, variants: [] };
+  const calls: string[] = []; const snapshots: Session[] = [];
+  const dependency: WorkflowDependencies = { research: (input, options) => research(input, options, deps(calls)), save: async session => { snapshots.push(structuredClone(session)); }, readVisual: async () => null, createAd: async () => { throw new Error("Should never generate"); }, reviewAd: async () => { throw new Error("Should never review"); } };
+  return { workflow: new Workflow(session, dependency), session, calls, snapshots };
+}
+
+test("homepage-only stage saves reusable branding and never follows a product link", async () => {
+  const calls: string[] = []; const checkpoints: string[] = [];
+  const result = await research(input(), { checkpoint: async result => { checkpoints.push(result.id); } }, deps(calls));
+  assert.ok(calls.every(url => !url.includes("/products/") && !url.includes("/collections/")));
+  assert.equal(result.campaign?.status, "awaiting_direction"); assert.equal(result.products?.length, 0);
+  assert.ok(result.suggestions!.length); assert.equal(result.brandKit?.typography.heading.value, "Example Sans");
+  assert.equal(result.assets!.filter(asset => asset.eligibleAsProductReference).length, 0);
+  assert.equal(checkpoints.length, 1); assert.notEqual(checkpoints[0], result.id);
+  assert.equal(parseResearchSnapshot(result, 2).schemaVersion, 2);
+});
+
+test("direct product scope gets missing brand context, structured product, and exact gallery", async () => {
+  const calls: string[] = [];
+  const result = await research(input(productUrl), { direction: { text: productUrl, origin: "specific_url", url: productUrl } }, deps(calls));
+  assert.deepEqual(calls, [home, productUrl]);
+  assert.equal(result.campaign?.status, "ready_for_brief"); assert.equal(result.products!.length, 1);
+  assert.equal(result.products![0].price?.amount, 29);
+  assert.equal(result.assets!.filter(asset => asset.eligibleAsProductReference).length, 1);
+  assert.equal(result.customerEvidence![0].ratingCount, 40); assert.equal(result.customerEvidence![0].reviewCount, 12);
+  groundBrief(brief(result), result);
+});
+
+test("page types treat locale home, About, tracking and unknown paths conservatively", () => {
+  assert.equal(pageHint("https://store.example/en-us/?utm_source=ad"), "home");
+  assert.equal(pageHint("https://store.example/pages/about-us"), "company");
+  assert.equal(pageHint("https://store.example/unfamiliar"), "unknown");
+  assert.equal(canonicalUrl(`${productUrl}?variant=12&utm_source=x`), `${productUrl}?variant=12`);
+  assert.equal(assetKey(photo), `${home}cdn/case.jpg?v=4`);
+});
+
+test("JSON-LD recommendation nodes, logos and loose images cannot claim main product ownership", () => {
+  const result = extractSource(source(productUrl, { "@graph": [node, { ...node, url: `${home}products/other`, image: [`${home}other.jpg`] }] }));
+  assert.equal(result.products.length, 1);
+  assert.deepEqual(result.assets.filter(asset => asset.eligibleAsProductReference).map(asset => asset.originalUrl), [photo]);
+  assert.equal(result.assets.find(asset => asset.originalUrl.endsWith("shipping.svg"))?.role, "unknown");
+  assert.equal(result.assets.find(asset => asset.originalUrl.endsWith("logo.png"))?.eligibleAsProductReference, false);
+});
+
+test("actual input intent abstains for negation and hypotheses; UI generation refusal leaves research authorized", () => {
+  for (const text of ["Maybe promote summer", "Do not research https://store.example/products/case", "What if we advertised this https://store.example/products/case?", "Promote it", "Choose that"]) assert.equal(userResearchIntent(text).direction, undefined, text);
+  assert.equal(userResearchIntent(`Research ${productUrl}. Do not generate an ad.`).direction?.origin, "specific_url");
+  assert.equal(userResearchIntent("Research store.example. Ask me what to promote before preparing any brief. Do not generate an ad.").direction, undefined);
+  assert.deepEqual(userResearchIntent("Research loopycases.com").urls, ["https://loopycases.com/"]);
+  assert.equal(userResearchIntent("Promote the summer collection").direction?.origin, "user_message");
+});
+
+test("invented tool direction and URLs cannot bypass persisted awaiting_direction after reload", async () => {
+  const { workflow, session, calls, snapshots } = workflowFixture();
+  workflow.setUserInput(`Research ${home}. Do not generate an ad.`, "first");
+  await workflow.research(input()); const before = calls.length;
+  const reloaded = structuredClone(session); assert.equal(reloaded.researchState?.stage, "awaiting_direction");
+  workflow.setUserInput("Looks good", "next");
+  await assert.rejects(workflow.research({ ...input(), direction: "promote summer" }), /explicitly/);
+  await assert.rejects(workflow.research(input(productUrl)), /current message/);
+  await assert.rejects(workflow.proposeBrief({ productUrl, referenceImage: photo, headline: "Hello", cta: "Shop", direction: "Evergreen", saleId: null, parentVariantId: null, feedback: "" }), /direction/);
+  assert.equal(calls.length, before);
+  assert.ok(snapshots.some(snapshot => snapshot.researchState?.stage === "awaiting_direction"));
+});
+
+test("explicit suggestion click supplies scope and product selection gates multi-product collections", async () => {
+  const calls: string[] = [];
+  const brand = await research(input(), {}, deps(calls));
+  const choice = brand.suggestions!.find(choice => choice.url === productUrl)!;
+  const intent = userResearchIntent(`[direction:${choice.id}] Research this direction`, "choice", brand);
+  assert.equal(intent.direction?.origin, "choice");
+  const result = await research(input(), { previous: brand, direction: intent.direction }, deps(calls));
+  assert.equal(result.brandKit?.id, brand.brandKit?.id); assert.equal(result.campaign?.selectedProductId, result.products![0].id);
+});
+
+test("missing optional synthesis keeps source facts and immutable checkpoint", async () => {
+  const calls: string[] = [];
+  const result = await research(input(productUrl), { direction: { text: productUrl, origin: "specific_url", url: productUrl } }, { ...deps(calls), synthesize: async () => { throw new Error("Model unavailable"); } });
+  assert.equal(result.products!.length, 1); assert.match(result.warnings.join(" "), /unavailable/); groundBrief(brief(result), result);
+});
+
+test("cross-product, wrong-variant, unresolved offer, copy claim and legacy drafts fail grounding", () => {
+  const result = productResearch(source(productUrl, node)); const draft = brief(result);
+  assert.throws(() => groundBrief({ ...draft, referenceAssetId: "missing" }, result), /Unknown/);
+  assert.throws(() => groundBrief({ ...draft, variantId: "not-known" }, result), /variant/);
+  assert.throws(() => groundBrief({ ...draft, saleId: "unresolved" }, result), /eligibility/);
+  assert.throws(() => groundBrief({ ...draft, headline: "20% off everything" }, result), /supported claim/);
+  assert.throws(() => groundBrief(draft, { ...result, schemaVersion: undefined }), /legacy/);
+  result.assets![0].productIds = ["other"];
+  assert.throws(() => groundBrief(draft, result), /selected product/);
+});
+
+test("schema column is authoritative, unknown versions and invalid V2 payloads fail", async () => {
+  const result = await research(input(), {}, deps([]));
+  assert.throws(() => parseResearchSnapshot(result, 1), /disagree/);
+  assert.throws(() => parseResearchSnapshot(result, 99), /unsupported/);
+  assert.throws(() => parseResearchSnapshot({ ...result, assets: [{ id: "bad" }] }, 2), /invalid/);
+});
+
+test("retrieval keeps complete branding, final URL, relative images and structured HTML", () => {
+  const result = normalizeScrape(home, { data: { metadata: { url: home, title: "Brand" }, images: ["/photo.jpg", "/photo.jpg"], rawHtml: "<html>source</html>", links: ["/products/case"], branding: { colors: { accent: "#abcdff" }, typography: { fontFamily: "Store Font" }, images: { logo: "/logo.svg" } } } });
+  assert.deepEqual(result.images, [`${home}photo.jpg`]); assert.equal(result.colors.accent, "#abcdff"); assert.equal(result.rawHtml, "<html>source</html>"); assert.ok(result.branding?.typography);
+});

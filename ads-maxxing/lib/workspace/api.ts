@@ -1,6 +1,10 @@
 import type { Brief, Session, Variant } from "@/lib/workflow/session-types";
 export type CampaignSummary = { id: string; title: string };
 export type WorkflowAction =
+  | { action: "confirmOffer"; offerId: string; productId: string }
+  | { action: "selectProduct"; productId: string }
+  | { action: "correctAsset"; assetId: string; role: import("@/lib/workflow/research/contracts").ResearchAsset["role"]; productId?: string }
+  | { action: "correctBrand"; field: "voice" | "audience" | "valueProposition"; value: string }
   | { action: "approveBrief" | "generateAd"; briefId: string }
   | { action: "reviseBrief"; brief: Brief }
   | { action: "approveAd" | "reviewAd"; variantId: string };

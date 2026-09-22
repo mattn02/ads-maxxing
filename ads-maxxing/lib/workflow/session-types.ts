@@ -3,11 +3,20 @@ import type { UIMessage } from "ai";
 import type { BriefInput, Findings, VisualReview } from "./schema";
 import type { Generation, Product } from "./types";
 
+import type { ResearchState, ResearchV2Fields } from "./research/contracts";
+
 export type Source = Product & {
+  requestedUrl?: string;
+  finalUrl?: string;
+  rawHtml?: string;
+  links?: string[];
+  branding?: Record<string, unknown>;
+  pageType?: "home" | "product" | "collection" | "company" | "unknown";
+  providerUsage?: number;
   fetchedAt: string;
   colors: Record<string, string>;
 };
-export type Research = {
+export type Research = Partial<ResearchV2Fields> & {
   id: string;
   sources: Source[];
   colors: { value: string; sourceUrl: string }[];
@@ -46,6 +55,7 @@ export type Session = {
   lastError?: string;
   preferences: Record<string, string>;
   research?: Research;
+  researchState?: ResearchState;
   brief?: Brief;
   variants: Variant[];
   events: { at: string; action: string; status: "started" | "completed" | "failed"; detail?: string }[];

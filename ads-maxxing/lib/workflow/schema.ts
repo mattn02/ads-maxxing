@@ -14,6 +14,8 @@ const optionalId = z.string().trim().nullish().transform(value => !value || /^(n
 export const researchInputSchema = z.object({
   url: researchUrl.describe("Store URL as plain text."),
   productUrl: optionalResearchUrl.describe("Optional product page URL; use null when absent."),
+  direction: z.string().trim().min(1).max(2000).optional(),
+  choiceId: z.string().max(160).optional(),
   campaignUrl: optionalResearchUrl.describe("Optional campaign page URL; use null when absent."),
 });
 export const findingsSchema = z.object({
@@ -27,6 +29,10 @@ export const findingsSchema = z.object({
 });
 export const briefSchema = z.object({
   design: designSchema.optional(),
+  productId: z.string().optional(),
+  referenceAssetId: z.string().optional(),
+  variantId: z.string().nullable().optional(),
+  logoAssetId: z.string().nullable().optional(),
   productUrl: z.string().url(),
   referenceImage: z.string().url(),
   headline: z.string().trim().min(1).max(120),

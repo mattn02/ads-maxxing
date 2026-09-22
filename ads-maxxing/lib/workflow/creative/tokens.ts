@@ -14,7 +14,8 @@ export function readableText(hex: string) {
 }
 export function resolveBrandTokens(research: Research): BrandTokens {
   const colors = research.colors.map(({ value }) => normalizeColor(value)).filter((value): value is string => !!value);
-  const background = colors[0] || "#f6f3ee";
-  const accent = colors[1] || readableText(background);
+  const role = (...roles: string[]) => research.brandKit?.colors.find(color => roles.includes(color.role))?.value;
+  const background = normalizeColor(role("background", "backgroundColor") || "") || colors[0] || "#f6f3ee";
+  const accent = normalizeColor(role("accent", "primary") || "") || colors[1] || readableText(background);
   return { background, foreground: readableText(background), accent, ctaForeground: readableText(accent), fontId: "geist-fallback" };
 }

@@ -296,7 +296,7 @@ function Workbench({
           {section === "Assets" ? (
             <AssetsView session={session} />
           ) : section === "Brand" ? (
-            <BrandView session={session} />
+            <BrandView session={session} action={action} />
           ) : !session?.research ? (
             <Onboarding busy={busy} submit={send} />
           ) : view === "campaign" ? (
@@ -324,6 +324,7 @@ function Workbench({
               busy={busy}
               send={send}
               create={() => setView("campaign")}
+              action={action}
             />
           ) : (
             <>

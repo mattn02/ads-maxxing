@@ -1,3 +1,4 @@
+import { productResearch } from "./research-fixture";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
@@ -21,9 +22,9 @@ import { generateImage } from "../lib/workflow/fal";
 import { scrapePage } from "../lib/workflow/firecrawl";
 import { readImage, saveGeneration } from "../lib/workflow/storage";
 
-const source: Source = { url: "https://store.example/product", title: "Real case", description: "A red case", images: ["https://store.example/case.png"], markdown: "Members get 10% off red cases through Friday.", colors: { primary: "#ff0000" }, fetchedAt: new Date().toISOString() };
-const makeResearch = (): Research => assembleResearch([structuredClone(source)], { voice: "Playful", audience: "Phone owners (inferred)", sales: [] });
-const brief: BriefInput = { design: { ...DEFAULT_DESIGN }, productUrl: source.url, referenceImage: source.images[0], headline: "Hold on to color", cta: "Shop now", direction: "Simple red background", saleId: null, feedback: "", parentVariantId: null };
+const source: Source = { url: "https://store.example/products/case", title: "Real case", description: "A red case", images: ["https://store.example/case.png"], markdown: "Members get 10% off red cases through Friday.", colors: { primary: "#ff0000" }, fetchedAt: new Date().toISOString() };
+const makeResearch = (): Research => productResearch(structuredClone(source));
+const brief: BriefInput = { productId: makeResearch().products![0].id, referenceAssetId: makeResearch().assets![0].id, design: { ...DEFAULT_DESIGN }, productUrl: source.url, referenceImage: source.images[0], headline: "Hold on to color", cta: "Shop now", direction: "Simple red background", saleId: null, feedback: "", parentVariantId: null };
 const passing = { status: "pass" as const, reason: "Matches supplied evidence." };
 const visual: VisualReview = { productFidelity: passing, textLegibility: passing, claimAccuracy: passing, brandFit: passing, summary: "Matches source and brief." };
 function fixture(overrides: Partial<WorkflowDependencies> = {}) {
@@ -80,8 +81,8 @@ test("direct generation rejects a stale brief ID before a paid request", async (
 test("only scraped photos and evidenced sale IDs can enter a brief", async () => {
   const { workflow } = fixture();
   await draft(workflow);
-  await assert.rejects(workflow.proposeBrief({ ...brief, referenceImage: "https://invented.example/product.png" }), /photo/);
-  await assert.rejects(workflow.proposeBrief({ ...brief, saleId: "invented" }), /sale/);
+  await assert.rejects(workflow.proposeBrief({ ...brief, referenceAssetId: "invented", referenceImage: "https://invented.example/product.png" }), /references/);
+  await assert.rejects(workflow.proposeBrief({ ...brief, saleId: "invented" }), /offer/);
   await assert.rejects(workflow.proposeBrief({ ...brief, parentVariantId: "invented" }), /Parent variant/);
 });
 
@@ -97,17 +98,15 @@ test("briefs accept absent IDs encoded as strings without bypassing approval", a
   }
 });
 
-test("brief URL formatting resolves to original source assets and rejects ambiguous matches", async () => {
+test("brief IDs resolve exact saved URLs and reject another product's asset", async () => {
   const { workflow, session } = fixture();
   await draft(workflow);
-  session.research!.sources[0].url = "https://store.example/";
-  session.research!.sources[0].images = ["https://store.example/case.png?v=123&width=3840"];
-  const saved = await workflow.proposeBrief({ ...brief, productUrl: "https://store.example" });
-  assert.equal(saved.productUrl, "https://store.example/");
+  session.research!.assets![0].originalUrl = "https://store.example/case.png?v=123&width=3840";
+  const saved = await workflow.proposeBrief({ ...brief, productUrl: "https://invented.example/", referenceImage: "https://invented.example/a.png" });
+  assert.equal(saved.productUrl, source.url);
   assert.equal(saved.referenceImage, "https://store.example/case.png?v=123&width=3840");
-  session.research!.sources[0].images.push("https://store.example/case.png?v=456");
-  await assert.rejects(workflow.proposeBrief({ ...brief, productUrl: "https://store.example" }), /ambiguous/);
-  await assert.rejects(workflow.proposeBrief({ ...brief, productUrl: "https://store.example", referenceImage: "https://other.example/case.png" }), /missing/);
+  session.research!.assets![0].productIds = ["other-product"];
+  await assert.rejects(workflow.proposeBrief(brief), /selected product/);
 });
 
 test("one approved revision generates once; feedback changes the next prompt and keeps ancestry", async () => {
@@ -305,7 +304,7 @@ test("real AI SDK loop streams research and brief tool results, pauses for appro
   ] });
   const failedAgent = createConcierge(workflow, failed);
   const failure = await createAgentUIStreamResponse({ agent: failedAgent, experimental_transform: conciergeText(failedAgent.responseText), uiMessages: [{ id: "user3", role: "user", parts: [{ type: "text", text: "Use an invented sale" }] }] });
-  assert.match(await failure.text(), /This sale is not supported by the saved research/);
+  assert.match(await failure.text(), /This offer is stale or its eligibility is unresolved/);
   assert.equal(failed.doStreamCalls.length, 1);
   assert.equal(generationCount(), 1);
 });
