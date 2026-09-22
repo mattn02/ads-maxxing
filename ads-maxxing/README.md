@@ -1,126 +1,100 @@
-# Local agent workflow PoC
+# Ad creative workspace
 
-A small backend-first implementation of **research → approved brief → image → review → feedback**. The plain console exercises the workflow and exposes tool results and saved state. Everything is stored on disk; there is no Supabase integration.
+A working **research → approved brief → portrait ad → review → feedback** workflow for ecommerce marketers. Start with a store such as [Loopy Cases](https://www.loopycases.com), choose what to promote, and generate ads grounded in its actual product photography. The workspace saves research, creative revisions, approvals and image bytes in Supabase.
 
-## Run
+This is engineering documentation. The assignment's author-written note, Excalidraw diagram and Loom walkthrough remain separate deliverables.
+
+## Run locally
+
+Use Node.js **20.9 or newer** and install the locked dependencies:
 
 ```sh
-npm install
+npm ci
+```
+
+Create `.env.local`:
+
+```dotenv
+NEXT_PUBLIC_SUPABASE_URL=https://PROJECT.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
+SUPABASE_SECRET_KEY=...
+FIRECRAWL_API_KEY=...
+FAL_AI_API_KEY=...
+AI_GATEWAY_KEY=...
+```
+
+Apply [`supabase/migrations/202609220001_workflow.sql`](supabase/migrations/202609220001_workflow.sql) in your Supabase project's SQL editor and enable **anonymous sign-ins** in Authentication. The migration creates the private `creative-assets` bucket. See [Supabase setup and recovery](docs/supabase-setup.md) for provisioning, permissions and verification. Missing Supabase configuration produces a setup error; production has no local-file fallback.
+
+```sh
 npm run dev -- --hostname 127.0.0.1
 ```
 
-Provide these values in `.env.local` (server only):
+Open [localhost:3000](http://localhost:3000). The initial workspace request establishes a private anonymous identity using HttpOnly cookies. Reloading in the same browser restores its campaigns. Clearing cookies or using another browser creates a different identity; cross-device account recovery is not implemented.
 
-```dotenv
-FIRECRAWL_API_KEY=...
-FAL_AI_API_KEY=...
-AI_GATEWAY_API_KEY=...
-```
+Supported environment aliases are `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` and `AI_GATEWAY_API_KEY`. Keep all provider keys and the Supabase secret server-only. Optional `CONCIERGE_MODEL`, `RESEARCHER_MODEL` and `REVIEWER_MODEL` overrides select each language role; the default is `inclusionai/ling-3.0-flash-vl-free` through AI Gateway. A replacement reviewer must support image input and the structured result tool. fal model requests have model-specific contracts in `lib/workflow/fal.ts`.
 
-The existing `AI_GATEWAY_KEY` name is also supported, so existing local configuration works without renaming it. The code never sends keys to the browser. Optional settings:
+For Vercel, configure the same environment, use the Node runtime and `npm run build -- --webpack`, and provision Supabase first. Durable data lives outside the deployment filesystem. A successful local build does not establish that hosted Auth, Storage or a deployed workflow has been verified.
 
-```dotenv
-CONCIERGE_MODEL=inclusionai/ling-3.0-flash-vl-free
-RESEARCHER_MODEL=inclusionai/ling-3.0-flash-vl-free
-REVIEWER_MODEL=inclusionai/ling-3.0-flash-vl-free
-# WORKFLOW_DATA_DIR=/absolute/path/to/local-data
-```
+## Use the workspace
 
-All three language roles default to **Ling 3.0 Flash VL Free through Vercel AI Gateway**. It is explicitly listed in the current Gateway catalog with $0 input/output pricing and accepts image input, so it can support the reviewer as well as the text-only roles. The artist retains **fal FLUX.2 klein 4B edit**, one 576 × 576 visual PNG, four steps, then a code-rendered 576 × 1024 final PNG; fal is a separate paid provider. These defaults prioritize testing cost over creative/evaluation quality. Models can be changed per role without changing the workflow. A replacement reviewer must support images and structured output; changing the fal model also requires updating its model-specific request in `fal.ts`.
+1. Start a campaign and send `Research https://www.loopycases.com`. Homepage research builds the brand kit, then **stops for your direction**. It does not silently choose a product. Select a suggested direction, give an explicit promotion scope, or paste a product/collection URL. A direct product request can enter campaign research immediately.
+2. Inspect the product choices and source images. Select the intended product; correct a misclassified asset, brand finding or offer eligibility when needed. Unknown evidence stays unknown. Offers require source evidence and your eligibility confirmation; an evergreen ad can proceed without one.
+3. Ask for a brief, inspect the selected real photo, exact copy, design and execution plan, and edit as needed. Source photo bytes are pinned to private Storage before approval. **Approve the brief and photo**, then generate. Approval itself does not call fal.
+4. Inspect the final 576 × 1024 PNG and its review findings. The reviewer checks the original photo, rendered ad, approved brief and source evidence. A passing review still needs your separate **Approve ad** action. Uncertain or failed reviews cannot be approved through an override.
+5. Give feedback such as `Keep the scene; shorten the headline` or `Show a hand using the loop`. The next brief references its parent variant and needs fresh approval. The saved plan explains which image stages can be reused. Reload and resume the campaign to inspect saved work or finish a recoverable operation.
 
-## Try the flow
+**Every research edit requires a fresh pending brief and approval**, including asset corrections, product selection, brand corrections and offer confirmation. Brief edits and preference changes also revoke pending approval. Previously generated ads keep their original research, copy, lineage and approvals.
 
-1. Click **New session** and send `Research https://www.loopycases.com and draft an ad.` Add a specific product URL and/or campaign URL when available. The researcher reads only the supplied URLs; it does not crawl an entire catalog.
-2. Inspect the colors, inferred voice/audience, and source-backed sale quotes. Select the actual product photo in the brief, edit headline/CTA, template, alignment, headline emphasis, CTA treatment, and visual direction if needed, and **Save revised brief**.
-3. Click **Approve brief and photo**, then **Generate approved brief**. Approval alone incurs no generation call. The Generate button calls the workflow directly with the approved brief ID, without another concierge model request. Chat can also request generation through the native `generateAd` tool.
-4. The artist saves the visual locally, composes exact approved copy into a final PNG, then the reviewer compares it with the product photo and source text. Inspect the verdict and per-criterion explanations. A review pass still requires **Approve ad** from the user.
-5. Click **Give feedback** on an output and describe a change, such as `Use a cream background and less copy.` The concierge creates a new brief with feedback and a parent variant ID. Approve that revision before generating again.
-6. Reload the page and choose **Resume a saved session** to restore chat, preferences, research, brief, and variants.
+## How it works
 
-For copy/style/layout changes, select **Reuse the parent’s saved visual**. Changing the photo, visual direction, research, model or palette requires a new visual request and approval. Reuse still runs the reviewer. A failed review can be retried without generating another image. If composition failed after saving the visual, **Finish saved creative** resumes from the checkpoint after reload, without fal. A failed or timed-out image request cannot automatically retry: inspect the events and any recovery JSON, then deliberately draft and approve a new revision if appropriate.
+The Next.js App Router serves a React/Tailwind workspace and authenticated API routes. Chat uses the Vercel AI SDK `useChat` hook and a `ToolLoopAgent` concierge. Native tool activity streams while the server owns workflow rules and trusted history. The current UI is custom; AI Elements components are not yet integrated.
 
-## Architecture and responsibilities
+The four roles are modules, not independently running workers:
 
-```mermaid
-flowchart TD
-  UI[Plain React test console / useChat] --> Chat[POST /api/chat — streamed AI SDK messages]
-  Chat --> Concierge[Concierge — ToolLoopAgent]
-  Concierge --> Tools[Typed tools]
-  Tools --> Flow[Workflow service — rules and persistence]
-  Flow --> Researcher[Researcher — Firecrawl + structured LLM extraction]
-  Researcher --> Sources[Saved markdown, images, brand colors, evidence]
-  Flow --> Brief[Draft brief]
-  UI --> Approval[POST /api/sessions/:id — human approval]
-  Approval --> Brief
-  Brief --> Artist[Artist — scene-only fal image edit or saved visual reuse]
-  Artist --> Visual[Local square visual + checkpoint]
-  Visual --> Render[Two templates + exact copy + bundled font]
-  Render --> PNG[Final local 576 × 1024 PNG]
-  PNG --> Reviewer[Reviewer — code checks + vision LLM]
-  Sources --> Reviewer
-  Reviewer --> Verdict[Pass / needs changes / needs human]
-  Verdict --> UI
-  UI -->|feedback| Concierge
-  Flow --> Disk[Local session JSON]
-  Chat --> Disk
-```
-
-The four roles are separate modules, not four continuously running processes. The concierge uses the AI SDK's built-in tool loop. Research and review are focused structured-output LLM calls. The concierge selects a small validated design with the brief. The artist executes it using a scene-only fal request (or a saved visual) and deterministic composition; there is no extra design/planning LLM call.
-
-Research and review obtain their structured results through a required `submitResult` tool and Zod validation. The free Gateway model rejects native JSON-schema response formatting, so neither agent uses that provider feature. Optional research URLs accept missing, empty, or null values; bare domains get HTTPS and Markdown-wrapped URLs are normalized before execution. Absent sale/parent IDs accept JSON null, the strings "null"/"none", or blank values. Real IDs still must exist in this session. `parentVariantId` is null for the first ad and references the earlier generated ad when iterating. Saved legacy `rawInput` message fields are migrated to `input` when loaded and saved.
-
-| File | Responsibility |
+| Component | Responsibility |
 | --- | --- |
-| `lib/workflow/agents/concierge.ts` | Short concierge prompt, five typed tools, bounded agent loop, compact state/context. Tools within one turn execute serially. |
-| `lib/workflow/agents/researcher.ts` | Scrape up to three supplied URLs; infer voice/audience; extract sales; drop sales whose quoted evidence is missing. |
-| `lib/workflow/agents/artist.ts` | Build the scene-only prompt, generate/reuse a saved visual, checkpoint it, compose the approved design, and save the final PNG. |
-| `lib/workflow/creative/` | Design/tokens contract, brand token resolution, canonical reuse checks, bundled-font copy fitting, two templates and ImageResponse composition. |
-| `lib/workflow/agents/reviewer.ts` | Deterministic checks plus a separate vision call comparing original photo, generated PNG, brief, and saved source evidence. |
-| `lib/workflow/service.ts` | Provider-independent workflow operations: research, revisions, approval, generation, review, preferences, and ad approval. Dependencies can be substituted in tests. |
-| `lib/workflow/schema.ts` | Zod contracts for tools, research findings, briefs and visual evaluations. |
-| `lib/workflow/session-types.ts` | Session, source, research, brief, variant, review and event types. |
-| `lib/workflow/models.ts` | Gateway credentials and per-role model selection. |
-| `lib/workflow/firecrawl.ts` | Firecrawl v2 HTTP adapter for markdown, image URLs, and branding colors. |
-| `lib/workflow/fal.ts` | Existing low-cost image-edit model and model-specific request settings. |
-| `lib/workflow/storage.ts` | Keep fal download validation separate from atomic composed-PNG writes; save/read visual assets and serve final images by UUID. |
-| `lib/workflow/sessions.ts` | Atomic JSON writes, history loading/listing, and one active request per session in one server process. |
-| `app/api/chat/route.ts` | Load trusted server history, accept a text-only user message, stream the concierge, save the completed conversation. |
-| `app/api/sessions/` | Create/list/load sessions and explicit human actions. The agent has no approval tool. |
-| `app/components/brief-editor.tsx` | Design controls, approval/revision state, explicit reuse and saved-creative retry. |
-| `app/workflow-console.tsx` | Minimal chat, source/photo inspection, brief editing/approval, variant review, and debug output. |
+| Concierge (`lib/workflow/agents/concierge.ts`) | Interprets requests, records preferences and invokes bounded, typed workflow tools. It has no human approval tool. |
+| Researcher (`lib/workflow/agents/researcher.ts`, `lib/workflow/research/`) | Uses Firecrawl branding, markdown, HTML and links; extracts products/assets with provenance; synthesizes voice, audience and evidence-backed offers. Scope follows actual user direction. |
+| Workflow (`lib/workflow/service.ts`) | Enforces grounding, revision invalidation, approval, execution plans, generation checkpoints, feedback and final approval. |
+| Artist (`lib/workflow/agents/artist.ts`, `lib/workflow/creative/`) | Generates an environment with fal FLUX.2 Klein 4B, then a scene with Nano Banana Pro edit using both the pinned original product and background. Composes exact approved copy in code. |
+| Reviewer (`lib/workflow/agents/reviewer.ts`) | Combines deterministic provenance/layout checks with a separate vision review. Saves pass, needs-changes or needs-human findings without automatic regeneration. |
+| Persistence (`lib/supabase/server.ts`, `lib/workflow/sessions.ts`, `lib/workflow/storage.ts`) | Verifies identity, enforces ownership and campaign leases, commits versioned state and stores immutable image bytes. |
 
-The previous standalone `/api/scrape` and `/api/generate` routes have been replaced by workflow tools so image generation follows the approval rules. The existing Firecrawl/fal adapters and output endpoint remain in use. AI Elements styling/components are deferred; the test console uses the AI SDK React hook directly.
+Research uses at most three pages for brand discovery, or eight attempts and three product pages for campaign research, within a three-minute budget. Successful retrieval is checkpointed before optional language-model synthesis. Failed pages produce warnings and retained partial results. Discovery is same-store and bounded; this is not a full catalog crawl. Product/asset IDs link a brief to saved evidence, and corrections are explicit user-supplied evidence. Voice and audience are labeled inferences; observed sale text does not itself prove eligibility.
 
-## What is scraped, inferred, and confirmed
+The artist generates images without the final headline/CTA, then renders the exact approved copy with two fixed templates. Scene normalization preserves aspect ratio without cropping or stretching. Output is a 9:16 PNG with a 448-pixel opaque copy panel and a 576-pixel visual region. Store typography can be observed, but rendering uses bundled Geist; it does not download or license store fonts. Emoji use bundled Twemoji SVGs. Unsupported glyphs and copy that cannot fit return actionable errors before generation.
 
-- **Scraped:** markdown, metadata, image URLs, Firecrawl branding colors, page URL and fetch timestamp. Announcement bars are included (`onlyMainContent: false`); fresh reads are requested (`maxAge: 0`) for sale evidence. Branding runs only on the first supplied page.
-- **Inferred:** voice and audience, explicitly labeled as inferences. Unknown is acceptable.
-- **Evidence-backed:** sales include an exact source excerpt and URL. A code check rejects unmatched excerpts. That proves the quote occurred, not that an offer is applicable or still active. The visual reviewer checks copy, restrictions and unsupported claims against saved text.
-- **Confirmed by the user:** actual product photo, final brief/copy, selected offer and final ad approval. A homepage can contain logos and banners; the user must choose the intended real product. If it is absent, provide a direct product URL.
+The default image plan uses two paid fal calls for a new ad. With compatible saved assets, copy-only changes use **zero**, scene/pose changes use **one**, and environment or geometry changes use **two**. Explicit fresh variations bypass the relevant reuse. These counts exclude language-model/reviewer calls; plans validate exact saved inputs and bytes before spending. See [artist verification](docs/artist-verification.md) for model settings, the dated pricing check and the distinction between mocked call-count tests and paid probes.
 
-## State, approvals, and failure behavior
+## Data and recovery
 
-`local-output/sessions/<session-id>.json` contains chat (including tool activity), per-session preferences, current research/brief, variants, and timestamped operation events. Each variant keeps its own brief and research snapshot, so later changes do not change what an old image was evaluated against.
+Exactly five application tables keep the ownership and creative history explicit:
 
-`local-output/visuals/<asset-id>.png` holds the generated scene. Its JSON stores canonical visual inputs (research ID, product URL, original photo, scene direction, model and palette), exact prompt, seed and provider recovery URL. Metadata is written before download; fal HTTPS host and PNG checks remain enforced.
+| Table | Saved data |
+| --- | --- |
+| `brands` | Owner-specific store identity and current brand kit. |
+| `research_snapshots` | Immutable, versioned source findings and user corrections. |
+| `campaigns` | Current research/brief pointers, chat, preferences, events and lease/revision state. |
+| `ad_versions` | Brief/design/copy, ancestry, approval/review status, generation and fixed stage checkpoints. |
+| `assets` | Original product/logo, generated background/scene and final ad records with hashes and private object paths. |
 
-`local-output/<brief-id>.png` is the composed output, served by `/api/outputs/<brief-id>`. Its JSON includes the visual asset record/ID, design/tokens snapshot, exact rendered copy and renderer version. A stable brief-based output ID makes composition retries idempotent. Preview and download use this same PNG. Source photo URLs are persisted, but source photo bytes are not copied locally yet.
+Each API request verifies the caller through Supabase Auth. Browser roles have owner-scoped read policies; mutations use server-only RPCs. Privileged server reads also filter the verified owner. Campaign leases and increasing revisions reject concurrent or stale writes across server processes. The Supabase secret never reaches the browser.
 
-- Draft edits and new preferences revoke pending approval. New research removes the current brief.
-- Approval is tied to the current brief ID. Client-supplied approval, tokens and checkpoint fields are stripped by schema validation. Legacy briefs get a new unapproved design revision before generation; legacy PNGs remain viewable and cannot supply visual reuse.
-- A generation-attempt marker is persisted **before** calling fal. Repeated calls for an already completed revision return the existing variant; uncertain provider requests without a saved visual cannot retry automatically. A saved visual checkpoint permits composition-only retry.
-- A generated image/variant is persisted **before** review. Review failure sets `review_failed` and preserves the output.
-- Review combines PNG aspect ratio, photo provenance, brief approval, sale evidence, design/tokens snapshots, exact copy, copy fit, visual provenance, renderer version, and vision criteria: product fidelity, text/CTA legibility, claim accuracy, brand fit. `fail` → `needs_changes`; uncertainty → `needs_human`; all pass → `reviewed`. Only reviewed outputs can be approved in this baseline; there is no override flow yet.
-- Reviewer findings never trigger automatic regeneration. Feedback goes into the next approved brief. The concierge translates it into copy/design changes. Only visual direction and the resolved visual palette reach fal; headline, CTA, offer copy and the raw preference/feedback record do not. Reuse validates exact canonical inputs and saved bytes before any paid side effect; an incompatible request fails instead of silently generating.
-- Stream consumption continues after a browser disconnect so local results can finish saving. Reload/resume to inspect them. This is not a durable background-job system.
+Source images must be observed in saved research and pass download validation before capture. fal receives fresh, short-lived signed URLs for the pinned source and background. Provider results are copied into private Storage rather than served indefinitely from fal URLs. Preview and download use authenticated application routes backed by those durable bytes.
 
-## Cost controls and current limits
+Each paid stage records its attempt **before** calling the provider and its result **before** downloading. An ambiguous attempt cannot automatically submit another paid request. A saved provider result can be downloaded again; a saved background or scene can be reused; saved images can be recomposed without repeating successful paid stages. Ready object paths are immutable, with hash checks for interrupted uploads. The final ad is persisted before review, so a review failure retains a viewable output and can be retried separately.
 
-Five concierge steps maximum per turn; one research/brief/generation/review tool attempt of each kind per turn; zero automatic LLM retries; one image per approved revision; at most three scraped pages; bounded source excerpts and recent chat context; 2,200 output tokens per LLM call. After a tool execution fails or a brief is saved, the agent loop ends immediately and the server supplies the error or approval instructions. No extra model call is made to explain that boundary. Concierge prose is buffered until the turn ends; native tool events still stream immediately. Printed XML tool-call tags are replaced with an explicit failure notice and never executed. Full chat remains on disk; the last 12 messages plus current state and saved preferences are supplied to the concierge. Explicit preferences persist per session, not across separate sessions.
+Disconnecting the browser does not deliberately cancel stream consumption, but this is not a durable job queue. If a worker dies before saving a provider result, or the recovery URL expires, operator inspection and a deliberately approved new version may be necessary. No fixture or local file silently substitutes for a failed production provider.
 
-This is a **single-user, single-process local PoC**. There is no authentication, rate limiting, distributed locking, durable job queue, global spending cap, Supabase, or deployment setup. Run on loopback. Local disk is not suitable for durable Vercel storage; replace the storage modules and request execution model before deployment. Source content and vision checks reduce hallucinations but cannot guarantee exact product preservation or deal validity.
+To inspect an older local demo before importing it, run the explicit **dry run**:
 
-## Verification
+```sh
+node --import tsx scripts/import-local.ts --owner DESTINATION_USER_UUID --directory /absolute/local-output
+```
+
+Use an existing destination identity. The [import instructions](docs/supabase-setup.md#importing-local-demos) describe `--apply`, conflicts and legacy provenance limits. Import never edits the source files or calls research/image providers. Legacy final images can remain viewable without being treated as reusable two-stage assets or as proof of the historical source photo.
+
+## Verification and limits
 
 ```sh
 npm test
@@ -129,35 +103,12 @@ npm run typecheck
 npm run build -- --webpack
 ```
 
-Tests run offline with fake providers and temporary storage. They cover approval enforcement/revision invalidation, reference provenance, sale evidence, duplicate-generation prevention, feedback/ancestry, review failure and retry, code/visual verdicts, persistence, concurrent-turn rejection, and provider request/PNG contracts. They do not establish live model quality.
+The test suite uses mocked providers and temporary/in-memory state; running it does not incur paid generation. It exercises approval and grounding rules, staged research, reference provenance, reuse plans, recovery, exact-copy rendering, ownership and persistence contracts. SQL and hosted-service checks are documented separately in [Supabase setup](docs/supabase-setup.md).
 
-The streaming integration test uses the real AI SDK agent/tool loop with a mock model: research → draft → pause → explicit approval → generate/review → streamed response and saved history. There is no charge for running the test suite.
+[Research verification](docs/research-implementation.md) records homepage/product checks for Loopy Cases, BlendJet, Allbirds, Peak Design and Ugmonk. These checks establish extraction behavior, not five approved ad campaigns. [Artist verification](docs/artist-verification.md) records five paid Loopy probes: the Klein scene attempts failed visual inspection; Nano improved the handheld result, while small markings in the simple scene remained uncertain. Mocked reuse tests and diagnostic rendering are not deployed end-to-end verification.
 
-### Hybrid renderer verification
+The main limits are product fidelity, incomplete store markup and operational hardening. The extractor supports structured product/gallery/offer evidence, not every arbitrary DOM gallery; unresolved assets need user confirmation. Asset role suggestions do not establish product or variant ownership; grounding still requires saved product evidence or an explicit user correction. There is no browser fallback or invented customer evidence. Source bytes retain their original orientation/color metadata. Reference-conditioned generation and vision review cannot guarantee exact logos, tiny markings or physical details. Review findings need human inspection.
 
-- 22 offline tests pass, plus lint, TypeScript and the webpack production build. Integration tests exercise real PNG composition and storage with mocked paid providers: visual reuse makes zero new fal calls; failed composition recovers after a session reload; attempts without checkpoints cannot retry; edits cannot inject approval or checkpoints; invalid reuse and overflowing copy fail before spending.
-- Both templates were visually inspected with long copy, punctuation, a contained tall image, light/dark surfaces, a fixture logo and complete offer terms. Unsupported glyphs and long unbroken words fail with actionable errors. Fonts are measured with `opentype.js` and rendered from the same bundled Geist Regular file (SIL OFL). This is explicitly a fallback font, not an extracted brand font. Logos are supported as verified server-provided bytes with dimensions; discovery/UI remain deferred.
-- Live Loopy Cases smoke: one fal visual and two distinct 576 × 1024 PNGs; the second changes headline/template/CTA style and reuses the identical visual asset. The first reviewer call failed and retained its output. The second passed code and text-legibility checks, but returned `needs_human` for minor product texture/loop-detail differences. No automatic regeneration or review retry was performed. This validates the plumbing, not exact product fidelity.
-- The existing local console was checked with a legacy session: design controls appear, old outputs remain viewable, and the new design requires saving and approval.
+There is no durable job queue, global spending cap, cross-device anonymous account recovery or automatic cleanup. Research/provider calls are bounded and automatic LLM retries are disabled, but those controls do not replace production rate limits or spend monitoring. This README does not claim a deployed Vercel URL or successful hosted verification; consult the linked records for the exact evidence.
 
-Reproduce the offline layout fixtures:
-
-```sh
-node --import tsx scripts/render-creative-fixtures.ts
-```
-
-The live smoke helper requires a saved `Source` JSON and an exact image URL from its image list. It uses an isolated directory, explicitly approves its own demo briefs, allows one fal request and writes a marker to prevent accidental reruns. It does not approve existing user sessions. **This command incurs one fal generation and two reviewer calls:**
-
-```sh
-node --env-file=.env.local --import tsx scripts/smoke-artist.ts local-output/smoke-source.json '<exact-source-image-url>' --allow-one-paid-visual
-```
-
-Inspect `local-output/artist-smoke/smoke-report.json` and its saved session/PNGs after the run. If the marker already exists, inspect the recorded attempt before deliberately arranging another smoke run.
-
-Supabase migration, deployment, custom brand fonts, logo discovery and freeform layouts remain outside this change. Local files are not durable Vercel storage. This README is engineering documentation, not the take-home’s author-written submission note.
-
-### Template emoji support
-
-Headlines, CTAs and offer terms retain their original emoji copy. The renderer embeds local SVGs from the pinned `@twemoji/svg` 15.0.0 package as one-em squares alongside Geist text, with the same widths used during fitting. Grapheme segmentation keeps skin tones, flags and joined emoji intact. No emoji CDN is needed at render time; Next.js tracing includes these assets in API deployments. Characters missing from both Geist and the bundled emoji set still produce an actionable validation error.
-
-Twemoji graphics are by Twitter and other contributors, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Source: [Twemoji](https://github.com/jdecked/twemoji). SVG artwork is used unchanged apart from display sizing.
+Twemoji artwork is by Twitter and other contributors, distributed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); [source](https://github.com/jdecked/twemoji). SVG artwork is unchanged apart from display sizing.
