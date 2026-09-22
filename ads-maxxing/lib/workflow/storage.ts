@@ -3,8 +3,9 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Generation } from "./types";
 import { WorkflowError } from "./validation";
-const outputDir = path.join(process.cwd(), "local-output");
+import { dataDirectory } from "./sessions";
 export async function saveGeneration(input: { imageUrl: string; model: string; seed?: number; prompt: string; referenceImage: string; productUrl: string }): Promise<Generation> {
+  const outputDir = dataDirectory();
   const id = randomUUID();
   const record = { ...input, id, createdAt: new Date().toISOString(), imageUrl: `/api/outputs/${id}` };
   // Preserve provider URL and inputs first, so a failed download is recoverable.
@@ -25,6 +26,6 @@ export async function saveGeneration(input: { imageUrl: string; model: string; s
 }
 export async function readImage(id: string) {
   if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id)) return null;
-  try { return await readFile(path.join(outputDir, `${id}.png`)); }
+  try { return await readFile(path.join(dataDirectory(), `${id}.png`)); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
 }
