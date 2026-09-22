@@ -22,6 +22,7 @@ export const assetSchema = z.object({
   classification: z.enum(["verified_structure", "unresolved", "user_confirmed", "excluded"]),
   eligibleAsProductReference: z.boolean(), containsMultipleProducts: z.boolean().nullable(), containsPromotionalText: z.boolean().nullable(),
   width: z.number().positive().nullable(), height: z.number().positive().nullable(),
+  visualAssessment: z.object({ role: z.enum(["logo", "product_photo", "product_lifestyle", "brand_lifestyle", "promotion_graphic", "icon", "swatch", "unknown"]), containsMultipleProducts: z.boolean().nullable(), containsPromotionalText: z.boolean().nullable(), uncertain: z.boolean(), reason: z.string(), origin: z.literal("inferred"), checkedAt: z.string() }).optional(),
 });
 export const brandKitSchema = z.object({
   id, revision: z.number().int().positive(), canonicalStoreUrl: url, name: z.string(),

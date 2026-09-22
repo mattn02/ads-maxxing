@@ -155,3 +155,15 @@ test("owner corrections survive refresh and every research edit revokes pending 
   assert.equal(historical.brandKit!.overrides.voice, "Concise and practical");
   assert.notEqual(session.research!.id, historical.id);
 });
+
+test("assigned unsorted photos retain product membership through refresh", async () => {
+  const { workflow, session } = workflowFixture();
+  workflow.setUserInput(`Research ${productUrl}`); await workflow.research(input(productUrl));
+  const candidate = session.research!.assets!.find(asset => asset.originalUrl.endsWith("shipping.svg"))!;
+  const productId = session.research!.products![0].id;
+  await workflow.correctAsset(candidate.id, "product_photo", productId);
+  await workflow.research(input(productUrl));
+  const corrected = session.research!.assets!.find(asset => asset.id === candidate.id)!;
+  assert.equal(corrected.classification, "user_confirmed");
+  assert.ok(session.research!.products![0].assetIds.includes(candidate.id));
+});
