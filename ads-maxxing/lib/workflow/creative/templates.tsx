@@ -2,12 +2,17 @@
 import React from "react";
 import type { BrandTokens, DesignSpec, VerifiedLogo } from "./schema";
 import type { CopyLayout, FittedText } from "./fit";
+import { textRuns } from "./emoji";
 
 type TemplateProps = { design: DesignSpec; tokens: BrandTokens; copy: CopyLayout; visualBytes: Buffer; logoBytes?: VerifiedLogo };
 const dataUrl = (bytes: Buffer) => `data:image/png;base64,${bytes.toString("base64")}`;
 function TextLines({ text, alignment = "left" }: { text: FittedText; alignment?: "left" | "center" }) {
   return <div style={{ display: "flex", flexDirection: "column", fontSize: text.size, lineHeight: `${text.lineHeight}px`, width: "100%" }}>
-    {text.lines.map((line, index) => <div key={index} style={{ whiteSpace: "pre", height: text.lineHeight, display: "flex", justifyContent: alignment === "center" ? "center" : "flex-start" }}>{line || " "}</div>)}
+    {text.lines.map((line, index) => <div key={index} style={{ whiteSpace: "pre", height: text.lineHeight, display: "flex", alignItems: "center", justifyContent: alignment === "center" ? "center" : "flex-start" }}>
+      {textRuns(line || " ", text.emojis).map((run, index) => run.image
+        ? <img key={index} src={run.image} alt="" width={text.size} height={text.size} style={{ flexShrink: 0 }} />
+        : <span key={index} style={{ whiteSpace: "pre" }}>{run.text}</span>)}
+    </div>)}
   </div>;
 }
 function ProductVisual({ bytes }: { bytes: Buffer }) {

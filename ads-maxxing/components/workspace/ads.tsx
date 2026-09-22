@@ -295,7 +295,7 @@ export function BriefEditor({
                   : "The selected visual is incompatible. Restore its photo/direction or turn reuse off and approve a new visual request."
                 : "Generate a new visual · one fal request, followed by composition and review."}
             </p>
-            <p>Font: bundled Geist fallback, not the brand’s actual font.</p>
+            <p>Font: bundled Geist fallback, not the brand’s actual font. Color emojis use Twemoji.</p>
           </fieldset>
 
           <label htmlFor="offer">Supported offer</label>
@@ -402,6 +402,10 @@ export function AdsView({
     const history = groups.find((g) => g.some((v) => v.id === variant.id)) || [
       variant,
     ];
+    const versionNumber = history.findIndex((v) => v.id === variant.id) + 1;
+    const reusedVersion = history.findIndex(
+      (v) => v.id === variant.brief.design?.reuseVisualFromVariantId,
+    ) + 1;
     return (
       <>
         <Button onClick={() => select(null)}>← All ads</Button>
@@ -411,11 +415,23 @@ export function AdsView({
           </Badge>
         </SectionHeading>
         <div className="ad-detail">
-          <img
-            className="ad-preview"
-            src={variant.imageUrl}
-            alt={variant.brief.headline}
-          />
+          <div>
+            <p className="muted small" aria-live="polite">
+              Viewing Version {versionNumber} of {history.length}
+            </p>
+            <img
+              key={variant.id}
+              className="ad-preview"
+              src={variant.imageUrl}
+              alt={`Version ${versionNumber}: ${variant.brief.headline}`}
+            />
+            {!!reusedVersion && (
+              <p className="muted small">
+                Reuses the product visual from Version {reusedVersion}. If the
+                copy and layout are unchanged, the ad will look the same.
+              </p>
+            )}
+          </div>
           <div>
             <div className="card">
               <h2>Review findings</h2>
@@ -467,6 +483,8 @@ export function AdsView({
               {history.map((v, i) => (
                 <button
                   key={v.id}
+                  type="button"
+                  aria-pressed={v.id === variant.id}
                   className={`version ${v.id === variant.id ? "active" : ""}`}
                   onClick={() => select(v.id)}
                 >

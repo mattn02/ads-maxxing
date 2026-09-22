@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { ConciergeMessage } from "@/lib/workflow/agents/concierge";
 import type { Session } from "@/lib/workflow/session-types";
 import { Badge, Button } from "./ui";
@@ -64,9 +66,25 @@ export function ChatPanel({
             {m.parts.map((p, i) => {
               if (p.type === "text")
                 return (
-                  <p key={i} className="message-text">
-                    {p.text}
-                  </p>
+                  <div key={i} className="message-text">
+                    <Markdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        a: ({ children, href, title }) => (
+                          <a href={href} title={title} target="_blank" rel="noopener noreferrer">
+                            {children}
+                          </a>
+                        ),
+                        table: ({ children }) => (
+                          <div className="message-table">
+                            <table>{children}</table>
+                          </div>
+                        ),
+                      }}
+                    >
+                      {p.text}
+                    </Markdown>
+                  </div>
                 );
               if (!p.type.startsWith("tool-")) return null;
               const state = "state" in p ? String(p.state) : "";

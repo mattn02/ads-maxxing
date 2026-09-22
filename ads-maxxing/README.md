@@ -155,3 +155,9 @@ node --env-file=.env.local --import tsx scripts/smoke-artist.ts local-output/smo
 Inspect `local-output/artist-smoke/smoke-report.json` and its saved session/PNGs after the run. If the marker already exists, inspect the recorded attempt before deliberately arranging another smoke run.
 
 Supabase migration, deployment, custom brand fonts, logo discovery and freeform layouts remain outside this change. Local files are not durable Vercel storage. This README is engineering documentation, not the take-home’s author-written submission note.
+
+### Template emoji support
+
+Headlines, CTAs and offer terms retain their original emoji copy. The renderer embeds local SVGs from the pinned `@twemoji/svg` 15.0.0 package as one-em squares alongside Geist text, with the same widths used during fitting. Grapheme segmentation keeps skin tones, flags and joined emoji intact. No emoji CDN is needed at render time; Next.js tracing includes these assets in API deployments. Characters missing from both Geist and the bundled emoji set still produce an actionable validation error.
+
+Twemoji graphics are by Twitter and other contributors, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Source: [Twemoji](https://github.com/jdecked/twemoji). SVG artwork is used unchanged apart from display sizing.

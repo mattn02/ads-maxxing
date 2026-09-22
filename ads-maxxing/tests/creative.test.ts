@@ -32,7 +32,7 @@ test("font fitting retains punctuation and complete offer conditions; overflow a
   assert.equal(fitted.offer!.lines.join(""), source.markdown);
   await assert.rejects(validateCreative({ ...brief, headline: "W".repeat(120) }, research), /Headline does not fit/);
   await assert.rejects(validateCreative({ ...brief, cta: "Shop our extraordinarily wonderful collection today" }, research), /CTA does not fit/);
-  await assert.rejects(validateCreative({ ...brief, headline: "Hello 🦖" }, research), /unsupported character/);
+  await assert.rejects(validateCreative({ ...brief, headline: "Hello \u0001" }, research), /unsupported character/);
   const longOffer = { ...research, sales: [{ ...research.sales[0], quote: source.markdown.repeat(15) }] };
   await assert.rejects(validateCreative(brief, longOffer), /shorter complete source quote/);
   for (const template of ["copy-top", "photo-top"] as const) {
@@ -40,6 +40,22 @@ test("font fitting retains punctuation and complete offer conditions; overflow a
     assert.equal(output.readUInt32BE(16), 576);
     assert.equal(output.readUInt32BE(20), 1024);
     assert.ok(output.length > 10000, "The renderer produces a populated PNG");
+  }
+});
+
+test("emoji copy preserves complete graphemes and renders locally in both templates", async t => {
+  t.mock.method(globalThis, "fetch", async () => { throw new Error("Rendering must not fetch emoji assets"); });
+  const brief = { ...makeBrief(), headline: "Celebrate 🎉📱", cta: "Shop 💚✨" };
+  for (const emoji of ["🎉", "🦖", "🐆", "👍🏽", "👨‍👩‍👧‍👦", "🇺🇸", "1️⃣", "❤️", "❤️‍🔥", "👁️‍🗨️"]) {
+    const copy = await validateCreative({ ...brief, headline: `Hello ${emoji}` }, research);
+    assert.equal(copy.headline.lines.join(""), `Hello ${emoji}`);
+    assert.deepEqual(Object.keys(copy.headline.emojis), [emoji]);
+  }
+  await assert.rejects(validateCreative({ ...brief, headline: "🎉".repeat(40) }, research), /Headline does not fit/);
+  for (const template of ["copy-top", "photo-top"] as const) {
+    const output = await renderCreative({ brief: { ...brief, design: { ...brief.design!, template } }, research, tokens: brief.tokens!, visualBytes: png });
+    assert.equal(output.readUInt32BE(16), 576);
+    assert.equal(output.readUInt32BE(20), 1024);
   }
 });
 

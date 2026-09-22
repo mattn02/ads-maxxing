@@ -43,7 +43,7 @@ export function BriefEditor({ brief, session, busy, action, generate }: { brief:
       <label htmlFor="visual-direction">Visual direction</label><textarea id="visual-direction" maxLength={1000} value={draft.design.visualDirection} onChange={event => updateDesign({ visualDirection: event.target.value })} />
       <label><input type="checkbox" disabled={!canReuse && !draft.design.reuseVisualFromVariantId} checked={!!draft.design.reuseVisualFromVariantId} onChange={event => updateDesign({ reuseVisualFromVariantId: event.target.checked ? parent!.id : null })} /> Reuse the parent’s saved visual</label>
       <p>{draft.design.reuseVisualFromVariantId ? canReuse ? "Reuse saved visual · no fal generation charge. The composed ad will be reviewed again." : "The selected visual is incompatible. Restore its photo/direction or turn reuse off and approve a new visual request." : "Generate a new visual · one fal request, followed by composition and review."}</p>
-      <p>Font: bundled Geist fallback, not the brand’s actual font.</p>
+      <p>Font: bundled Geist fallback, not the brand’s actual font. Color emojis use Twemoji.</p>
     </fieldset>
     <label htmlFor="sale">Offer</label><select id="sale" disabled={busy} value={draft.saleId || ""} onChange={event => update({ saleId: event.target.value || null })}>
       <option value="">No offer</option>{session.research?.sales.map(sale => <option key={sale.id} value={sale.id}>{sale.description}</option>)}

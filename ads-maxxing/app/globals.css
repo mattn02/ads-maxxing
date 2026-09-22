@@ -535,8 +535,81 @@ label:first-child {
   margin-bottom: 10px;
 }
 .message-text {
-  white-space: pre-wrap;
+  min-width: 0;
   overflow-wrap: anywhere;
+}
+.message-text > * + * {
+  margin-top: 10px;
+}
+.message-text :is(h1, h2, h3, h4, h5, h6) {
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: normal;
+}
+.message-text :is(p, li) {
+  white-space: pre-wrap;
+}
+.message-text :is(ul, ol) {
+  padding-left: 20px;
+}
+.message-text ul {
+  list-style-type: disc;
+}
+.message-text ol {
+  list-style-type: decimal;
+}
+.message-text li + li {
+  margin-top: 4px;
+}
+.message-text a {
+  color: var(--action);
+  text-decoration: underline;
+}
+.message-text blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 12px;
+  color: var(--muted);
+}
+.message-text code {
+  border-radius: 4px;
+  background: var(--surface-muted);
+  padding: 2px 4px;
+  font-size: 11px;
+}
+.message-text pre {
+  overflow-x: auto;
+  border-radius: 6px;
+  background: var(--surface-muted);
+  padding: 10px;
+  white-space: pre;
+}
+.message-text pre code {
+  padding: 0;
+}
+.message-table {
+  overflow-x: auto;
+}
+.message-text table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.message-text :is(th, td) {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: left;
+}
+.message-text img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+.message-text .contains-task-list {
+  list-style: none;
+}
+.message-text .task-list-item input {
+  margin-right: 6px;
 }
 .message.user {
   background: #f4f5f0;
