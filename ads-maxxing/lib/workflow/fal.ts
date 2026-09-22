@@ -1,12 +1,13 @@
 import { requireKey, WorkflowError } from "./validation";
-export const MODEL = "fal-ai/flux-2/klein/4b/edit";
+import { MODEL } from "./fal-model";
+export { MODEL } from "./fal-model";
 // One reference, one image, four steps. Keep model-specific arguments here.
 export async function generateImage(referenceImage: string, prompt: string) {
   const key = requireKey("FAL_AI_API_KEY");
   const response = await fetch(`https://fal.run/${MODEL}`, {
     method: "POST",
     headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ image_urls: [referenceImage], prompt, image_size: { width: 576, height: 1024 }, num_images: 1, num_inference_steps: 4, output_format: "png", enable_safety_checker: true }),
+    body: JSON.stringify({ image_urls: [referenceImage], prompt, image_size: { width: 576, height: 576 }, num_images: 1, num_inference_steps: 4, output_format: "png", enable_safety_checker: true }),
     signal: AbortSignal.timeout(180000),
   });
   if (!response.ok) {

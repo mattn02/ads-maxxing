@@ -1096,3 +1096,20 @@ label:first-child {
     scroll-behavior: auto !important;
   }
 }
+
+fieldset {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin: 20px 0;
+  min-width: 0;
+}
+legend {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 6px;
+}
+input[type="checkbox"] {
+  width: auto;
+  margin-right: 8px;
+}

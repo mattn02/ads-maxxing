@@ -33,3 +33,7 @@ The worktree has its own ignored local-output directory and no copied credential
 - Live provider calls and paid generation were not run during the base UI pass.
 
 Run locally with Node 24: `npm run dev -- --port 3100`.
+
+## Integration with template generation
+
+Merged main's template-generation feature into the workspace brief editor. Template, alignment, headline emphasis, CTA style, visual direction, compatible parent visual reuse, legacy design initialization, and saved-visual completion remain available. Existing server validation and duplicate-attempt protections are unchanged.

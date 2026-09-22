@@ -6,9 +6,14 @@ import { safeError, WorkflowError } from "./validation";
 import { research } from "./agents/researcher";
 import { createAd } from "./agents/artist";
 import { reviewAd } from "./agents/reviewer";
+import { DEFAULT_DESIGN } from "./creative/schema";
+import { resolveBrandTokens } from "./creative/tokens";
+import { validateCreative } from "./creative/fit";
+import { compatibleParent, matchesVisual } from "./creative/reuse";
+import { readVisual } from "./storage";
 
-export type WorkflowDependencies = { research: typeof research; createAd: typeof createAd; reviewAd: typeof reviewAd; save: typeof saveSession };
-const defaults: WorkflowDependencies = { research, createAd, reviewAd, save: saveSession };
+export type WorkflowDependencies = { research: typeof research; createAd: typeof createAd; reviewAd: typeof reviewAd; save: typeof saveSession; readVisual: typeof readVisual };
+const defaults: WorkflowDependencies = { research, createAd, reviewAd, save: saveSession, readVisual };
 
 /** Workflow rules live here, independently of the LLM, HTTP routes and UI. */
 export class Workflow {
@@ -59,29 +64,56 @@ export class Workflow {
     }
     if (data.saleId && !research.sales.some(sale => sale.id === data.saleId)) throw new WorkflowError("This sale is not supported by the saved research.");
     if (data.parentVariantId && !this.session.variants.some(variant => variant.id === data.parentVariantId)) throw new WorkflowError("Parent variant not found.");
-    this.session.brief = { ...data, id: randomUUID(), researchId: research.id };
+    const next = { ...data, design: data.design ?? structuredClone(DEFAULT_DESIGN), tokens: resolveBrandTokens(research), id: randomUUID(), researchId: research.id };
+    await validateCreative(next, research);
+    this.session.brief = next;
     await this.event("brief", "completed", "Waiting for human approval of this revision and photo.");
     return this.session.brief;
+  }
+  private async requireDesign() {
+    const brief = this.session.brief;
+    if (brief && (!brief.design || !brief.tokens)) {
+      await this.proposeBrief(brief);
+      throw new WorkflowError("This legacy brief now has a new design revision. Review and approve its design and copy before generating.", 409);
+    }
   }
   async approveBrief(id: string) {
     const brief = this.session.brief;
     if (!brief || brief.id !== id) throw new WorkflowError("The brief changed. Review the current revision first.", 409);
+    await this.requireDesign();
     if (brief.generationAttemptedAt) throw new WorkflowError("This revision already attempted generation. Draft and approve a new revision to try again.", 409);
     brief.approvedAt = new Date().toISOString();
     await this.event("approve_brief", "completed", id);
     return brief;
   }
   async generate(expectedBriefId?: string) {
+    if (expectedBriefId && this.session.brief?.id !== expectedBriefId) throw new WorkflowError("The brief changed. Review the current revision first.", 409);
+    // Completed legacy variants remain viewable and idempotent.
+    const completed = this.session.variants.find(variant => variant.brief.id === this.session.brief?.id);
+    if (completed) return completed;
+    await this.requireDesign();
     const { brief, research } = this.session;
-    if (expectedBriefId && brief?.id !== expectedBriefId) throw new WorkflowError("The brief changed. Review the current revision first.", 409);
     if (!brief?.approvedAt || !research || brief.researchId !== research.id) throw new WorkflowError("Approve the current brief and product photo before generating.", 409);
-    const existing = this.session.variants.find(variant => variant.brief.id === brief.id);
-    if (existing) return existing; // Repeated tool calls cannot pay for another image.
-    if (brief.generationAttemptedAt) throw new WorkflowError("Generation was already attempted. Check saved outputs/events before approving a new revision; a timed-out request may be billed.", 409);
-    brief.generationAttemptedAt = new Date().toISOString();
+    if (brief.generationAttemptedAt && !brief.visualCheckpoint) throw new WorkflowError("Generation was already attempted. Check saved outputs/events before approving a new revision; a timed-out request may be billed.", 409);
+    await validateCreative(brief, research);
+    let asset = brief.visualCheckpoint;
+    if (asset && !matchesVisual(brief, asset)) throw new WorkflowError("Saved visual checkpoint is incompatible with this brief. Save a new revision.");
+    if (!asset && brief.design?.reuseVisualFromVariantId) {
+      const parent = this.session.variants.find(variant => variant.id === brief.design!.reuseVisualFromVariantId);
+      if (!compatibleParent(brief, parent)) throw new WorkflowError("Requested visual reuse is incompatible or missing. Use the matching parent/photo/direction, or save and approve a brief requesting a new visual.");
+      asset = parent!.visualAsset;
+    }
+    if (asset && !await this.deps.readVisual(asset.id)) throw new WorkflowError("Saved visual bytes are missing. Restore the asset or save a new brief explicitly requesting a new visual.");
+    brief.generationAttemptedAt ??= new Date().toISOString();
     await this.deps.save(this.session); // Persist before the paid side effect.
     return this.run("generate", async () => {
-      const output = await this.deps.createAd(brief, research, this.session.preferences);
+      const output = await this.deps.createAd(brief, research, {
+        visual: asset,
+        checkpoint: async visual => {
+          brief.visualCheckpoint = structuredClone(visual);
+          await this.deps.save(this.session);
+        },
+      });
       const variant: Variant = { ...output, brief: structuredClone(brief), research: structuredClone(research), status: "pending_review" };
       this.session.variants.push(variant);
       await this.deps.save(this.session); // Review failure must never lose the image.

@@ -1,5 +1,11 @@
 /* eslint-disable @next/next/no-img-element -- Local outputs and real store reference images. */
 import { useState } from "react";
+import {
+  DEFAULT_DESIGN,
+  type DesignSpec,
+} from "@/lib/workflow/creative/schema";
+import { compatibleParent } from "@/lib/workflow/creative/reuse";
+import { resolveBrandTokens } from "@/lib/workflow/creative/tokens";
 import type { Brief, Session, Variant } from "@/lib/workflow/session-types";
 import {
   groupVariants,
@@ -111,10 +117,28 @@ export function BriefEditor({
   action: (a: WorkflowAction) => Promise<boolean>;
 }) {
   const brief = session.brief!;
-  const [draft, setDraft] = useState(brief);
-  const [dirty, setDirty] = useState(false);
+  const completedVariant = session.variants.find(
+    (variant) => variant.brief.id === brief.id,
+  );
+  const [draft, setDraft] = useState({
+    ...brief,
+    parentVariantId: completedVariant?.id ?? brief.parentVariantId,
+    design: brief.design ?? { ...DEFAULT_DESIGN },
+    tokens:
+      brief.tokens ??
+      (session.research ? resolveBrandTokens(session.research) : undefined),
+  });
+  const [dirty, setDirty] = useState(!brief.design || !brief.tokens);
+  const parent = session.variants.find(
+    (variant) => variant.id === draft.parentVariantId,
+  );
+  const canReuse = compatibleParent(draft, parent);
+  const canFinish = !!brief.visualCheckpoint && !completedVariant;
+  function updateDesign(values: Partial<DesignSpec>) {
+    update({ design: { ...draft.design, ...values } });
+  }
   function update(value: Partial<Brief>) {
-    setDraft({ ...draft, ...value });
+    setDraft({ ...draft, ...value, design: value.design ?? draft.design });
     setDirty(true);
   }
   async function generate() {
@@ -185,6 +209,95 @@ export function BriefEditor({
             value={draft.direction}
             onChange={(e) => update({ direction: e.target.value })}
           />
+          <fieldset disabled={busy}>
+            <legend>Creative design</legend>
+            <label htmlFor="template">Template</label>
+            <select
+              id="template"
+              value={draft.design.template}
+              onChange={(event) =>
+                updateDesign({
+                  template: event.target.value as DesignSpec["template"],
+                })
+              }
+            >
+              <option value="copy-top">Copy above photo</option>
+              <option value="photo-top">Photo above copy</option>
+            </select>
+            <label htmlFor="alignment">Alignment</label>
+            <select
+              id="alignment"
+              value={draft.design.alignment}
+              onChange={(event) =>
+                updateDesign({
+                  alignment: event.target.value as DesignSpec["alignment"],
+                })
+              }
+            >
+              <option value="left">Left</option>
+              <option value="center">Center</option>
+            </select>
+            <label htmlFor="headline-style">Headline emphasis</label>
+            <select
+              id="headline-style"
+              value={draft.design.headlineStyle}
+              onChange={(event) =>
+                updateDesign({
+                  headlineStyle: event.target
+                    .value as DesignSpec["headlineStyle"],
+                })
+              }
+            >
+              <option value="standard">Standard</option>
+              <option value="oversized">Oversized</option>
+            </select>
+            <label htmlFor="cta-style">CTA style</label>
+            <select
+              id="cta-style"
+              value={draft.design.ctaStyle}
+              onChange={(event) =>
+                updateDesign({
+                  ctaStyle: event.target.value as DesignSpec["ctaStyle"],
+                })
+              }
+            >
+              <option value="solid">Solid</option>
+              <option value="outline">Outline · quieter</option>
+            </select>
+            <label htmlFor="visual-direction">Visual direction</label>
+            <textarea
+              id="visual-direction"
+              maxLength={1000}
+              value={draft.design.visualDirection}
+              onChange={(event) =>
+                updateDesign({ visualDirection: event.target.value })
+              }
+            />
+            <label>
+              <input
+                type="checkbox"
+                disabled={!canReuse && !draft.design.reuseVisualFromVariantId}
+                checked={!!draft.design.reuseVisualFromVariantId}
+                onChange={(event) =>
+                  updateDesign({
+                    reuseVisualFromVariantId: event.target.checked
+                      ? parent!.id
+                      : null,
+                  })
+                }
+              />{" "}
+              Reuse the parent’s saved visual
+            </label>
+            <p>
+              {draft.design.reuseVisualFromVariantId
+                ? canReuse
+                  ? "Reuse saved visual · no fal generation charge. The composed ad will be reviewed again."
+                  : "The selected visual is incompatible. Restore its photo/direction or turn reuse off and approve a new visual request."
+                : "Generate a new visual · one fal request, followed by composition and review."}
+            </p>
+            <p>Font: bundled Geist fallback, not the brand’s actual font.</p>
+          </fieldset>
+
           <label htmlFor="offer">Supported offer</label>
           <select
             id="offer"
@@ -231,17 +344,29 @@ export function BriefEditor({
             <Button
               type="button"
               primary
-              disabled={busy || dirty || !!brief.generationAttemptedAt}
+              disabled={
+                busy ||
+                dirty ||
+                !!completedVariant ||
+                (!!brief.generationAttemptedAt && !canFinish)
+              }
               onClick={() => void generate()}
             >
               {busy
                 ? "Working…"
-                : brief.approvedAt
-                  ? "Generate approved brief"
-                  : "Approve brief & generate"}
+                : canFinish
+                  ? "Finish saved creative"
+                  : brief.approvedAt
+                    ? "Generate approved brief"
+                    : "Approve brief & generate"}
             </Button>
           </div>
-          {brief.generationAttemptedAt && (
+          {canFinish && (
+            <p className="notice">
+              The visual is saved. Finishing this creative will not call fal.
+            </p>
+          )}
+          {brief.generationAttemptedAt && !canFinish && (
             <p className="notice">
               Generation was already attempted for this revision. Edit the brief
               or give feedback to create another.

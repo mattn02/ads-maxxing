@@ -4,6 +4,7 @@ import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { DEFAULT_DESIGN } from "../lib/workflow/creative/schema";
 import { Workflow, type WorkflowDependencies } from "../lib/workflow/service";
 import { assembleResearch } from "../lib/workflow/agents/researcher";
 import { artistPrompt } from "../lib/workflow/agents/artist";
@@ -22,15 +23,15 @@ import { readImage, saveGeneration } from "../lib/workflow/storage";
 
 const source: Source = { url: "https://store.example/product", title: "Real case", description: "A red case", images: ["https://store.example/case.png"], markdown: "Members get 10% off red cases through Friday.", colors: { primary: "#ff0000" }, fetchedAt: new Date().toISOString() };
 const makeResearch = (): Research => assembleResearch([structuredClone(source)], { voice: "Playful", audience: "Phone owners (inferred)", sales: [] });
-const brief: BriefInput = { productUrl: source.url, referenceImage: source.images[0], headline: "Hold on to color", cta: "Shop now", direction: "Simple red background", saleId: null, feedback: "", parentVariantId: null };
+const brief: BriefInput = { design: { ...DEFAULT_DESIGN }, productUrl: source.url, referenceImage: source.images[0], headline: "Hold on to color", cta: "Shop now", direction: "Simple red background", saleId: null, feedback: "", parentVariantId: null };
 const passing = { status: "pass" as const, reason: "Matches supplied evidence." };
 const visual: VisualReview = { productFidelity: passing, textLegibility: passing, claimAccuracy: passing, brandFit: passing, summary: "Matches source and brief." };
 function fixture(overrides: Partial<WorkflowDependencies> = {}) {
   const session: Session = { id: randomUUID(), createdAt: "now", updatedAt: "now", messages: [], preferences: {}, variants: [], events: [] };
   let generations = 0;
   const workflow = new Workflow(session, {
-    research: async () => makeResearch(), save: async () => {},
-    createAd: async current => { generations++; return { id: randomUUID(), imageUrl: "/api/outputs/test", model: "test", prompt: artistPrompt(current, session.research!, session.preferences), referenceImage: current.referenceImage, createdAt: "now" }; },
+    research: async () => makeResearch(), save: async () => {}, readVisual: async () => null,
+    createAd: async current => { generations++; return { id: randomUUID(), imageUrl: "/api/outputs/test", model: "test", prompt: artistPrompt(current), referenceImage: current.referenceImage, createdAt: "now" }; },
     reviewAd: async () => ({ verdict: "pass", visual, checks: [], createdAt: "now" }), ...overrides,
   });
   return { workflow, session, generationCount: () => generations };
@@ -117,7 +118,7 @@ test("one approved revision generates once; feedback changes the next prompt and
   assert.equal(output.status, "reviewed");
   assert.equal((await workflow.generate()).id, output.id);
   assert.equal(generationCount(), 1);
-  const next = await workflow.proposeBrief({ ...brief, feedback: "Use a cream background", direction: "Cream background", parentVariantId: output.id });
+  const next = await workflow.proposeBrief({ ...brief, feedback: "Use a cream background", direction: "Cream background", design: { ...DEFAULT_DESIGN, visualDirection: "Use a cream background" }, parentVariantId: output.id });
   await assert.rejects(workflow.generate(), /Approve/);
   await workflow.approveBrief(next.id);
   const second = await workflow.generate();
@@ -210,7 +211,7 @@ test("atomic session persistence reloads history and preferences; locks reject c
   } finally { delete process.env.WORKFLOW_DATA_DIR; await rm(dir, { recursive: true, force: true }); }
 });
 
-test("provider adapters forward real photo, use 9:16, request branding and save a local PNG", async t => {
+test("provider adapters forward real photo, use a square visual, request branding and save a local PNG", async t => {
   const dir = await mkdtemp(path.join(tmpdir(), "ad-adapter-test-"));
   process.env.WORKFLOW_DATA_DIR = dir;
   process.env.FAL_AI_API_KEY = "fixture";
@@ -225,7 +226,7 @@ test("provider adapters forward real photo, use 9:16, request branding and save 
     if (String(url).includes("fal.run")) {
       const body = JSON.parse(init!.body as string);
       assert.deepEqual(body.image_urls, [source.images[0]]);
-      assert.deepEqual(body.image_size, { width: 576, height: 1024 }); assert.equal(body.num_images, 1);
+      assert.deepEqual(body.image_size, { width: 576, height: 576 }); assert.equal(body.num_images, 1);
       return Response.json({ images: [{ url: "https://fal.media/fixture.png" }] });
     }
     return new Response(png);

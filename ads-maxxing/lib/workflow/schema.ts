@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { designSchema } from "./creative/schema";
 
 const shortText = z.string().trim().min(1).max(2000);
 // Normalize common model formatting without accepting malformed URLs or IDs.
@@ -25,6 +26,7 @@ export const findingsSchema = z.object({
   })).max(10),
 });
 export const briefSchema = z.object({
+  design: designSchema.optional(),
   productUrl: z.string().url(),
   referenceImage: z.string().url(),
   headline: z.string().trim().min(1).max(120),
