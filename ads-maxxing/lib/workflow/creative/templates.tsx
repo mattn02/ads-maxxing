@@ -15,8 +15,11 @@ function TextLines({ text, alignment = "left" }: { text: FittedText; alignment?:
     </div>)}
   </div>;
 }
-function ProductVisual({ bytes }: { bytes: Buffer }) {
-  return <img src={dataUrl(bytes)} alt="" width={576} height={1024} style={{ position: "absolute", left: 0, top: 0, objectFit: "fill" }} />;
+function ProductVisual({ bytes, design }: { bytes: Buffer; design: DesignSpec }) {
+  const visual = templateGeometry(design.template).visual;
+  // Providers can ignore empty-space instructions. Contain the complete scene
+  // in its own slot so an opaque copy panel can never hide product details.
+  return <img src={dataUrl(bytes)} alt="" width={visual.width} height={visual.height} style={{ position: "absolute", left: visual.x, top: visual.y, objectFit: "contain" }} />;
 }
 function Logo({ logo }: { logo: VerifiedLogo }) {
   const scale = Math.min(160 / logo.width, 28 / logo.height);
@@ -45,7 +48,7 @@ function CopyGroup({ design, tokens, copy, logoBytes }: TemplateProps) {
 }
 export function CreativeTemplate(props: TemplateProps) {
   return <div style={{ display: "flex", position: "relative", width: 576, height: 1024, background: props.tokens.background, color: props.tokens.foreground, fontFamily: "Geist", fontWeight: 400 }}>
-    <ProductVisual bytes={props.visualBytes} />
+    <ProductVisual bytes={props.visualBytes} design={props.design} />
     <CopyGroup {...props} />
   </div>;
 }

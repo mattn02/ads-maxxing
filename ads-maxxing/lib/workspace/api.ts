@@ -1,6 +1,15 @@
 import type { Brief, Session, Variant } from "@/lib/workflow/session-types";
-export type CampaignSummary = { id: string; title: string };
+export type CampaignSummary = { id: string; title: string; brandId?: string; purpose?: "brand_setup" | "campaign" };
+import type { BrandSummary, BrandDetail, BrandEdits } from "@/lib/workflow/onboarding-contracts";
 export type WorkflowAction =
+  | { action: "generateCampaign"; requestId: string; source: import("@/lib/workflow/generation-contracts").GenerationSource }
+  | { action: "continueCampaign"; requestId: string }
+  | { action: "setCampaignScope"; members: import("@/lib/workflow/research/scope").CampaignMember[] }
+  | { action: "selectCampaignMember"; productId: string; variantId: string | null }
+  | { action: "generateCampaignMember"; requestId: string; productId: string; variantId: string | null }
+  | { action: "refineAd"; requestId: string; variantId: string; feedback: string }
+  | { action: "retryCreative"; requestId: string; previousRequestId: string; briefId: string; acknowledgePossibleDuplicate?: boolean }
+  | { action: "researchBrand"; operationId: string }
   | { action: "confirmOffer"; offerId: string; productId: string }
   | { action: "selectProduct"; productId: string }
   | { action: "correctAsset"; assetId: string; role: import("@/lib/workflow/research/contracts").ResearchAsset["role"]; productId?: string }
@@ -26,7 +35,11 @@ export async function request<T>(url: string, body?: unknown): Promise<T> {
 }
 export const workspaceApi = {
   open: (id: string) => request<Session>(`/api/sessions/${id}`),
-  create: () => request<Session>("/api/sessions", {}),
+  create: (url: string, key: string) => request<Session>("/api/sessions", { action: "setup", url, key }),
+  startCampaign: (brandId: string, key: string, setupId?: string) => request<Session>("/api/sessions", { action: "campaign", brandId, key, setupId }),
+  brands: () => request<BrandSummary[]>("/api/brands"),
+  brand: (id: string) => request<BrandDetail>(`/api/brands/${id}`),
+  saveBrand: (id: string, revision: number, edits: BrandEdits) => request<BrandDetail>(`/api/brands/${id}`, { revision, edits }),
   list: () => request<CampaignSummary[]>("/api/sessions"),
   action: (id: string, action: WorkflowAction) =>
     request<Session>(`/api/sessions/${id}`, action),
@@ -40,6 +53,7 @@ export const statusLabels: Record<Variant["status"], string> = {
   approved: "Approved",
 };
 export function storeName(session: Session | null) {
+  if (session?.research?.brandKit?.name) return session.research.brandKit.name;
   const url = session?.research?.sources[0]?.url;
   try {
     return url ? new URL(url).hostname.replace(/^www\./, "") : "Your brand";

@@ -9,6 +9,7 @@ export type Source = Product & {
   requestedUrl?: string;
   finalUrl?: string;
   rawHtml?: string;
+  shopify?: { url: string; fetchedAt: string; product: Record<string, unknown> };
   links?: string[];
   branding?: Record<string, unknown>;
   pageType?: "home" | "product" | "collection" | "company" | "unknown";
@@ -29,6 +30,8 @@ export type Brief = BriefInput & {
   id: string;
   researchId: string;
   approvedAt?: string;
+  approvalOrigin?: "user_brief" | "campaign_generate";
+  retryOfBriefId?: string;
   generationAttemptedAt?: string;
   tokens?: BrandTokens;
   visualCheckpoint?: VisualAsset; // Read-only legacy checkpoint.
@@ -51,8 +54,15 @@ export type Variant = Generation & {
   status: "pending_review" | "review_failed" | "needs_changes" | "needs_human" | "reviewed" | "approved";
   review?: Review;
   reviewError?: string;
+  acceptance?: { acceptedAt: string; reviewedAt: string };
 };
 export type Session = {
+  nextAction?: import("./generation-contracts").NextAction;
+  purpose?: "brand_setup" | "campaign";
+  brandId?: string;
+  setup?: import("./onboarding-contracts").BrandSetup;
+  leaseExpiresAt?: string;
+  operationActive?: boolean;
   id: string;
   createdAt: string;
   updatedAt: string;

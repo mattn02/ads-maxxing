@@ -1,0 +1,65 @@
+/** Actual SQL reference guards in isolated Postgres; no hosted writes. */
+import assert from "node:assert/strict";
+import { readFile, readdir } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
+import { randomUUID } from "node:crypto";
+if (!process.env.PGLITE_MODULE) throw new Error("Set PGLITE_MODULE to @electric-sql/pglite/dist/index.js");
+const { PGlite } = await import(pathToFileURL(process.env.PGLITE_MODULE).href);
+const db = new PGlite();
+await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(bucket_id text,name text);create function storage.foldername(text) returns text[] language sql as $$select string_to_array($1,'/')$$;grant usage on schema public,auth to authenticated;`);
+const directory = new URL("../supabase/migrations/", import.meta.url);
+const migrationName = "202609220006_research_reference.sql";
+const migration = await readFile(new URL(migrationName, directory), "utf8");
+for (const name of (await readdir(directory)).filter(name => name.endsWith(".sql") && name < "202609220005").sort()) await db.exec(await readFile(new URL(name, directory), "utf8"));
+await assert.rejects(db.exec(migration), /through 005/);
+await db.exec("rollback");
+await db.exec(await readFile(new URL("202609220005_review_acceptance.sql", directory), "utf8"));
+const oldDefinition = (await db.query("select pg_get_functiondef('public.commit_campaign(uuid,uuid,uuid,integer,jsonb,text,integer)'::regprocedure) value")).rows[0].value;
+await db.exec(migration);
+assert.equal((await db.query("select pg_get_functiondef('public.commit_campaign(uuid,uuid,uuid,integer,jsonb,text,integer)'::regprocedure) value")).rows[0].value, oldDefinition);
+const definition = (await db.query("select pg_get_functiondef('public.commit_campaign_v2(uuid,uuid,uuid,integer,jsonb,text,integer)'::regprocedure) value")).rows[0].value;
+assert.equal(definition.slice(definition.indexOf(" -- Historical variants")), oldDefinition.slice(oldDefinition.indexOf(" -- Historical variants")), "All version, paid-attempt, immutable and acceptance guards remain byte-for-byte unchanged");
+const call = async (name, args) => (await db.query(`select ${name}(${args.map((_, i) => "$" + (i + 1)).join(",")}) result`, args)).rows[0].result;
+const owner = randomUUID(), other = randomUUID();
+await db.query("insert into auth.users values($1),($2)", [owner, other]);
+const make = async (user, host) => {
+  const id = randomUUID(); await call("create_campaign", [user, id]);
+  const lease = await call("claim_campaign", [user, id]);
+  const research = { id: randomUUID(), schemaVersion: 2, sources: [{ url: `https://${host}/`, title: host, markdown: "Actual saved evidence" }], brandKit: { name: host }, sales: [] };
+  const session = { messages: [], events: [], preferences: {}, variants: [], research };
+  const save = async (payload = session, schema = 2, hostname = host, actingOwner = user) => {
+    const result = await call("commit_campaign_v2", [actingOwner, id, lease.token, lease.revision, payload, hostname, schema]);
+    lease.revision = result.revision; return result;
+  };
+  await save(); return { id, lease, research, session, save };
+};
+const current = await make(owner, "store.example"), foreignOwner = await make(other, "store.example"), foreignBrand = await make(owner, "other.example");
+const { research, session, save } = current;
+const reference = { ...session, researchReference: { id: research.id, schemaVersion: 2 } }; delete reference.research;
+const before = (await db.query("select data from research_snapshots where id=$1", [research.id])).rows[0].data;
+await save({ ...reference, events: [{ stage: "review", status: "started" }] });
+assert.deepEqual((await db.query("select data from research_snapshots where id=$1", [research.id])).rows[0].data, before);
+assert.equal((await db.query("select current_research_id from campaigns where id=$1", [current.id])).rows[0].current_research_id, research.id);
+await assert.rejects(save({ ...reference, research: null }), /never both/);
+await assert.rejects(save({ ...reference, research }), /never both/);
+for (const value of [null, {}, { id: research.id }, { id: research.id, schemaVersion: "2" }, { id: research.id, schemaVersion: 3 }]) await assert.rejects(save({ ...reference, researchReference: value }), /Invalid saved research/);
+for (const id of [randomUUID(), foreignOwner.research.id, foreignBrand.research.id]) await assert.rejects(save({ ...reference, researchReference: { id, schemaVersion: 2 } }), /owner, campaign brand and schema/);
+await assert.rejects(save({ ...reference, researchReference: { id: research.id, schemaVersion: 1 } }, 1), /owner, campaign brand and schema/);
+await assert.rejects(save(reference, 1), /Invalid saved research/);
+await assert.rejects(save(reference, 2, "other.example"), /owner, campaign brand and schema/);
+await assert.rejects(save(reference, 2, "store.example", other), /lease expired/);
+await assert.rejects(save({ ...session, research: { ...research, sales: [{ id: "changed" }] } }), /immutable/);
+const refreshed = { ...research, id: randomUUID(), sources: [...research.sources, { url: "https://store.example/products/new", title: "New observed product" }] };
+await save({ ...session, research: refreshed });
+assert.equal((await db.query("select count(*)::int total from research_snapshots")).rows[0].total, 4);
+for (const role of ["anon", "authenticated", "service_role"]) {
+  const allowed = (await db.query("select has_function_privilege($1,'public.commit_campaign_v2(uuid,uuid,uuid,integer,jsonb,text,integer)','EXECUTE') allowed", [role])).rows[0].allowed;
+  assert.equal(allowed, role === "service_role");
+}
+assert.equal((await db.query("select exists(select 1 from pg_proc p,aclexplode(p.proacl) a where p.oid='public.commit_campaign_v2(uuid,uuid,uuid,integer,jsonb,text,integer)'::regprocedure and a.grantee=0 and a.privilege_type='EXECUTE') allowed")).rows[0].allowed, false);
+await db.exec("set role service_role");
+await save({ ...reference, researchReference: { id: refreshed.id, schemaVersion: 2 } });
+await db.exec("reset role");
+await assert.rejects(db.exec(migration), /already exists/); await db.exec("rollback");
+await db.close();
+console.log("PASS: research reference owner/brand/schema isolation, malformed/mixed rejection, canonical snapshot reuse, full snapshot immutability/refresh, unchanged old RPC and all post-research guards, service-only grants, predecessor/reapply guards.");

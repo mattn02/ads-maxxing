@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { WorkflowError, apiError } from "../workflow/validation";
 
-export type PersistenceContext = { userId: string; lease?: { campaignId: string; token: string; revision: number }; brandId?: string };
+export type PersistenceContext = { userId: string; lease?: { campaignId: string; token: string; revision: number }; brandId?: string; researchFingerprints?: Map<string, string> };
 export const persistenceContext = new AsyncLocalStorage<PersistenceContext>();
 export function ownerContext() {
   const context = persistenceContext.getStore();
@@ -17,9 +17,13 @@ export function configuration() {
 }
 export async function supabase(path: string, init: RequestInit = {}, token?: string) {
   const config = configuration();
+  const started = Date.now();
   const response = await fetch(`${config.url}${path}`, { ...init, cache: "no-store", signal: init.signal ?? AbortSignal.timeout(30000), headers: { apikey: token ? config.key : config.serviceKey, ...(token || config.serviceKey.startsWith("eyJ") ? { Authorization: `Bearer ${token ?? config.serviceKey}` } : {}), "Content-Type": "application/json", ...init.headers } });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
+    console.error(JSON.stringify({ event: "supabase-request", path: path.split("?")[0], status: response.status, code: typeof body.code === "string" && /^[A-Z0-9_]+$/i.test(body.code) ? body.code : undefined, durationMs: Date.now() - started, ...(typeof init.body === "string" ? { payloadBytes: Buffer.byteLength(init.body) } : {}) }));
+    if (body.code === "57014") throw new WorkflowError("Saving this step timed out. Previously saved work is retained. Retry the step to continue.", 503);
+    if (path === "/rest/v1/rpc/commit_campaign_v2" && body.code === "PGRST202") throw new WorkflowError("Apply Supabase migration 202609220006 before continuing. This save made no changes.", 503);
     const message = typeof body.message === "string" ? body.message : "";
     if (message.startsWith("WORKFLOW:")) throw new WorkflowError(message.slice(9), 409);
     throw new WorkflowError(`Supabase operation failed (${response.status}). Check configuration and migrations; saved work is retained.`, response.status === 404 ? 404 : 503);

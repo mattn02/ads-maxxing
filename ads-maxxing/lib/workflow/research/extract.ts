@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Source } from "../session-types";
 import type { Evidence, ResearchAsset, ResearchProduct, ResearchV2Fields } from "./contracts";
 import { webUrl } from "../validation";
+import { shopifyImages, shopifyProductNodes, shopifyVariants } from "./shopify-variants";
 
 export const stableId = (kind: string, value: string) => `${kind}_${createHash("sha256").update(value).digest("hex").slice(0, 24)}`;
 export function canonicalUrl(value: string) {
@@ -13,6 +14,8 @@ export function canonicalUrl(value: string) {
 }
 export function productIdentityUrl(value: string) {
   const url = new URL(canonicalUrl(value));
+  // Shopify collection links and canonical product links identify the same item.
+  url.pathname = url.pathname.replace(/\/collections\/[^/]+\/products\//, "/products/");
   for (const key of ["variant", "selling_plan"]) url.searchParams.delete(key);
   return url.href;
 }
@@ -105,6 +108,27 @@ export function extractSource(source: Source): { products: ResearchProduct[]; as
     const rating = object(node.aggregateRating); const value = Number(rating.ratingValue); const best = Number(rating.bestRating || 5);
     if (rating.ratingValue != null && value >= 0 && value <= best && best > 0) customerEvidence.push({ id: stableId("evidence", `${productId}:rating`), kind: "rating", productId, evidence: { ...evidence, quote: JSON.stringify(rating) }, value: `${value}/${best}`, attribution: null, ratingCount: Number.isInteger(Number(rating.ratingCount)) && rating.ratingCount != null ? Number(rating.ratingCount) : null, reviewCount: Number.isInteger(Number(rating.reviewCount)) && rating.reviewCount != null ? Number(rating.reviewCount) : null, checkedAt: source.fetchedAt });
   }
+  const supplemental = source.shopify && (() => {
+    try {
+      const endpoint = new URL(source.shopify.url), expected = new URL(productIdentityUrl(source.finalUrl || source.url));
+      expected.search = ""; expected.pathname += ".js";
+      return endpoint.href === expected.href ? [source.shopify.product] : [];
+    } catch { return []; }
+  })();
+  for (const node of [...shopifyProductNodes(source.rawHtml || ""), ...(supplemental || [])]) {
+    const declared = node === source.shopify?.product ? source.finalUrl || source.url : absolute(node.url || (typeof node.handle === "string" ? `/products/${node.handle}` : undefined), source.finalUrl || source.url);
+    if (!declared || productIdentityUrl(declared) !== productIdentityUrl(source.finalUrl || source.url) || pageHint(declared) !== "product") continue;
+    const canonical = productIdentityUrl(declared), productId = stableId("product", canonical);
+    const evidence: Evidence = { sourceUrl: node === source.shopify?.product ? source.shopify.url : source.url, quote: JSON.stringify({ id: node.id, handle: node.handle, options: node.options }).slice(0, 4000), method: "shopify", origin: "observed" };
+    const assetIds = shopifyImages(node).flatMap(image => { const url = absolute(image, source.url); return url ? [addAsset(url, "product_photo", evidence, productId)] : []; });
+    const variants = shopifyVariants(node).map(variant => {
+      const id = stableId("variant", `${productId}:${variant.storeId}`);
+      const variantEvidence = { ...evidence, quote: JSON.stringify({ productId: node.id, variantId: variant.storeId, attributes: variant.attributes, images: variant.images }).slice(0, 4000) };
+      const variantAssets = variant.images.flatMap(image => { const url = absolute(image, source.url); if (!url) return []; const assetId = addAsset(url, "product_photo", variantEvidence, productId); assets.get(assetId)!.variantIds.push(id); assets.get(assetId)!.evidence = variantEvidence; return [assetId]; });
+      return { id, storeId: variant.storeId, title: variant.title, attributes: variant.attributes, assetIds: variantAssets };
+    });
+    products.push({ id: productId, canonicalUrl: canonical, storeId: typeof node.id === "number" || typeof node.id === "string" ? String(node.id) : null, title: text(node.title) || source.title, description: text(node.description) || source.description, evidence, assetIds: [...new Set([...assetIds, ...variants.flatMap(variant => variant.assetIds)])], variants, price: null });
+  }
   const brandingImages = object(source.branding?.images);
   const logos = [brandingImages.logo, source.branding?.logo, ...structured.filter(node => isType(node, "Organization")).map(node => typeof node.logo === "string" ? node.logo : object(node.logo).url)];
   for (const logo of logos) { const url = absolute(logo, source.url); if (url) addAsset(url, "logo", { sourceUrl: source.url, quote: url, method: "branding", origin: "observed" }); }
@@ -114,7 +138,10 @@ export function extractSource(source: Source): { products: ResearchProduct[]; as
   for (const product of products) {
     const old = groupedProducts.get(product.id);
     groupedProducts.set(product.id, old ? { ...old, title: old.title === product.title ? old.title : source.title,
-      assetIds: [...new Set([...old.assetIds, ...product.assetIds])], variants: [...new Map([...old.variants, ...product.variants].map(variant => [variant.id, variant])).values()] } : product);
+      assetIds: [...new Set([...old.assetIds, ...product.assetIds])], variants: [...new Map([...old.variants, ...product.variants].map(variant => {
+        const previous = old.variants.find(item => item.id === variant.id);
+        return [variant.id, previous ? { ...previous, ...variant, attributes: { ...previous.attributes, ...variant.attributes }, assetIds: [...new Set([...previous.assetIds, ...variant.assetIds])] } : variant];
+      })).values()] } : product);
   }
   return { products: [...groupedProducts.values()], assets: [...assets.values()].map(asset => ({ ...asset, variantIds: [...new Set(asset.variantIds)] })), customerEvidence: [...new Map(customerEvidence.map(item => [item.id, item])).values()] };
 }

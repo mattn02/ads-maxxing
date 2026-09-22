@@ -1,3 +1,5 @@
+import { observed, type ReportProgress } from "../diagnostics";
+import { safeError } from "../validation";
 import { z } from "zod";
 import type { ModelMessage } from "ai";
 import { assetSchema, type ResearchAsset } from "./contracts";
@@ -43,7 +45,7 @@ export function applyAssessments(assets: ResearchAsset[], assessments: AssetAsse
     };
   });
 }
-export async function classifyResearchAssets(assets: ResearchAsset[], sources: Source[], deadline: number, deps: VisionDependencies = defaults): Promise<{ assets: ResearchAsset[]; warnings: string[] }> {
+export async function classifyResearchAssets(assets: ResearchAsset[], sources: Source[], deadline: number, deps: VisionDependencies = defaults, progress?: ReportProgress): Promise<{ assets: ResearchAsset[]; warnings: string[] }> {
   const warnings: string[] = [];
   // Reserve a full 60-second structuredResult window before starting optional work.
   if (deadline - deps.now() < 75000) return { assets, warnings: ["Photo classification was skipped at the research deadline. Unsorted images remain ineligible."] };
@@ -72,11 +74,11 @@ export async function classifyResearchAssets(assets: ResearchAsset[], sources: S
     { type: "file" as const, data: new Uint8Array(bytes), mediaType },
   ]);
   try {
-    const result = classificationSchema.parse(await deps.classify([{ role: "user", content }]));
+    const result = await observed("vision-model", "Classifying downloaded photos", async () => classificationSchema.parse(await deps.classify([{ role: "user", content }])), progress, { optional: true });
     const allowedIds = new Set(loaded.map(item => item.asset.id));
     if (result.assessments.some(item => !allowedIds.has(item.assetId))) warnings.push("Ignored invented image IDs from photo classification.");
     const dimensions = new Map(loaded.map(item => [item.asset.id, item]));
     const sized = assets.map(asset => dimensions.has(asset.id) ? { ...asset, width: dimensions.get(asset.id)!.width, height: dimensions.get(asset.id)!.height } : asset);
     return { assets: applyAssessments(sized, result.assessments, allowedIds, new Date(deps.now()).toISOString()), warnings: [...new Set(warnings)] };
-  } catch { return { assets, warnings: [...new Set([...warnings, "Photo classification was unavailable. Structural ownership is preserved and unsorted photos remain ineligible; inspect the selected photo before approval."])] }; }
+  } catch (error) { return { assets, warnings: [...new Set([...warnings, `${safeError(error)} Photo classification was unavailable. Structural ownership is preserved and unsorted photos remain ineligible; inspect the selected photo before approval.`])] }; }
 }

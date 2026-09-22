@@ -87,10 +87,9 @@ export function Onboarding({
     </div>
   );
 }
-export function ResearchView({ session, busy, send, create, action }: {
+export function ResearchView({ session, busy, create, action }: {
   session: Session; busy: boolean; send: (text: string) => void; create: () => void; action: (body: WorkflowAction) => Promise<unknown>;
 }) {
-  const [direction, setDirection] = useState("");
   const research = session.research!;
   const awaiting = session.researchState?.stage === "awaiting_direction";
   const selected = research.campaign?.selectedProductId;
@@ -102,14 +101,7 @@ export function ResearchView({ session, busy, send, create, action }: {
       <div className="card"><Badge>{research.brandKit?.overrides.voice ? "User supplied" : "Inferred"}</Badge><h3>Brand voice</h3><p>{research.voice}</p></div>
       <div className="card"><Badge>{research.brandKit?.overrides.audience ? "User supplied" : "Inferred"}</Badge><h3>Suggested audience</h3><p>{research.audience}</p></div>
     </div>
-    <form className="card" onSubmit={event => { event.preventDefault(); send(/^https?:\/\//i.test(direction) ? `Research ${direction}` : `Promote ${direction}`); setDirection(""); }}>
-      <h2>{awaiting ? "What would you like to promote?" : "Refine the scope or add a product"}</h2>
-      <label htmlFor="campaign-direction">Product URL, collection, or campaign direction</label>
-      <input id="campaign-direction" required maxLength={1800} value={direction} onChange={event => setDirection(event.target.value)} placeholder="A product URL, or our summer case collection" disabled={busy} />
-      <Button disabled={busy} primary>Research this direction →</Button>
-      {awaiting && <div className="actions">{research.suggestions?.map(choice => <Button type="button" key={choice.id} disabled={busy} onClick={() => send(`[direction:${choice.id}] Research this direction: ${choice.label}`)}>{choice.label} →</Button>)}</div>}
-      {awaiting && <p className="small muted">Suggestions come from store navigation. Choosing one starts scoped research.</p>}
-    </form>
+    {awaiting && <div className="card"><h2>Choose what to promote</h2><p>Choose a suggested campaign, describe your idea, or share a product URL.</p><Button onClick={create}>Choose a campaign →</Button></div>}
     {!!research.products?.length && <><h2>Products <span className="muted">{research.products.length} researched</span></h2><div className="source-grid">{research.products.map(product => <div className="card source-card" key={product.id}>
       <h3>{product.title}</h3><p>{product.description}</p><a href={product.canonicalUrl} target="_blank" rel="noreferrer">View source ↗</a>
       {product.price && <p>{product.price.currency} {product.price.amount} · observed price</p>}
@@ -118,13 +110,13 @@ export function ResearchView({ session, busy, send, create, action }: {
       <p className="small muted">{product.variants.length ? `${product.variants.length} evidenced variants` : "Variant not established; do not assume a specific size or model."}</p>
       <Button disabled={busy || selected === product.id} onClick={() => void action({ action: "selectProduct", productId: product.id })}>{selected === product.id ? "Selected product" : "Choose this product"}</Button>
     </div>)}</div></>}
-    {selected && <div className="card next-step"><div><h2>Ready to shape your ad</h2><p>Use the selected product and verified photo to prepare a brief. Generation still needs your approval.</p></div><Button primary disabled={busy} onClick={() => { create(); send("Prepare an evergreen brief for my selected product using its verified photo. Use no offer."); }}>Prepare a brief →</Button></div>}
+    {selected && <div className="card next-step"><div><h2>Product saved to your campaign</h2><p>Your real product photos are the starting point for the creative.</p></div><Button primary disabled={busy} onClick={create}>View campaign →</Button></div>}
     <details className="card"><summary>Unsorted and excluded images · {research.assets?.filter(asset => !asset.eligibleAsProductReference && asset.role !== "logo").length || 0}</summary>
       <p className="muted">These images are not eligible product references. Inspect before assigning them; a filename is not evidence.</p>
       <div className="asset-grid">{research.assets?.filter(asset => !asset.eligibleAsProductReference && asset.role !== "logo").slice(0, 36).map(asset => <div className="card asset" key={asset.id}><img src={asset.originalUrl} alt="Unsorted store image" loading="lazy"/><Badge>{asset.role}</Badge>{asset.visualAssessment && <p className="small muted">Visual inference · {asset.visualAssessment.reason}</p>}<div className="actions"><Button disabled={busy} onClick={() => void action({ action: "correctAsset", assetId: asset.id, role: "promotion_graphic" })}>This is a banner</Button>{selected && <Button disabled={busy} onClick={() => void action({ action: "correctAsset", assetId: asset.id, role: "product_photo", productId: selected })}>Confirm as selected product</Button>}</div></div>)}</div>
     </details>
     <details className="card"><summary>Offers and customer evidence</summary><p>No offer is selected by default. Full restrictions and customer eligibility must be checked before using a promotion.</p>{research.offers?.map(offer => <p key={offer.id}>{offer.quote} <Badge>{offer.eligibility}</Badge><br/><a href={offer.sourceUrl} target="_blank" rel="noreferrer">Source ↗</a> · checked {new Date(offer.checkedAt).toLocaleDateString()}{selected && offer.eligibility !== "eligible" && <Button disabled={busy} onClick={() => void action({ action: "confirmOffer", offerId: offer.id, productId: selected })}>I confirm this product and target customers meet all these terms</Button>}</p>)}{!research.offers?.length && <p className="muted">No supported offer found. Evergreen product ads can proceed.</p>}{research.customerEvidence?.map(item => <p key={item.id}><Badge>{item.kind}</Badge> {item.value} · {item.productId ? "Product-scoped" : "Company-scoped"} <a href={item.evidence.sourceUrl} target="_blank" rel="noreferrer">Source ↗</a></p>)}{!research.customerEvidence?.length && <p className="muted">No customer evidence found. No rating or testimonial will be invented.</p>}</details>
-    <details className="card"><summary>Research coverage and sources</summary><p>{run ? `${run.scope} stage · ${run.status} · ${run.attemptedUrls.length} pages attempted · ${run.failedUrls.length} unavailable` : "Legacy research: refresh a product before making a new brief."}</p>{research.sources.map(source => <p key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.title} ↗</a> · {new Date(source.fetchedAt).toLocaleString()}</p>)}</details>
+    <details className="card"><summary>Research coverage and sources</summary><p>{run ? `${run.scope} stage · ${run.status} · ${run.attemptedUrls.length} pages attempted · ${run.failedUrls.length} unavailable` : research.schemaVersion === 2 ? "Brand context saved. Choose a direction to begin product research." : "Legacy research: refresh a product before making a new brief."}</p>{research.sources.map(source => <p key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.title} ↗</a> · {new Date(source.fetchedAt).toLocaleString()}</p>)}</details>
     {research.warnings.map(warning => <p className="notice" key={warning}>{warning}</p>)}
   </>;
 }

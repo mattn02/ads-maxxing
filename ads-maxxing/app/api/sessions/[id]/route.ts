@@ -1,3 +1,5 @@
+import { researchBrand } from "@/lib/workflow/onboarding";
+import { validateStoreHost } from "@/lib/workflow/brands";
 import { authenticated } from "@/lib/supabase/server";
 import { publicSession } from "@/lib/workflow/public-session";
 import { z } from "zod";
@@ -6,10 +8,14 @@ import { briefSchema } from "@/lib/workflow/schema";
 import { Workflow } from "@/lib/workflow/service";
 import { loadSession, lockSession } from "@/lib/workflow/sessions";
 import { apiError, WorkflowError } from "@/lib/workflow/validation";
+import { generateCampaignActionSchema, continueCampaignActionSchema, retryCreativeActionSchema, setCampaignScopeActionSchema, selectCampaignMemberActionSchema, generateCampaignMemberActionSchema, refineAdActionSchema } from "@/lib/workflow/generation-contracts";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 type Context = { params: Promise<{ id: string }> };
 const actionSchema = z.discriminatedUnion("action", [
+  generateCampaignActionSchema, continueCampaignActionSchema, retryCreativeActionSchema,
+  setCampaignScopeActionSchema, selectCampaignMemberActionSchema, generateCampaignMemberActionSchema, refineAdActionSchema,
+  z.object({ action: z.literal("researchBrand"), operationId: z.string().uuid() }),
   z.object({ action: z.literal("confirmOffer"), offerId: z.string(), productId: z.string() }),
   z.object({ action: z.literal("selectProduct"), productId: z.string() }),
   z.object({ action: z.literal("correctAsset"), assetId: z.string(), role: assetSchema.shape.role, productId: z.string().optional() }),
@@ -33,7 +39,20 @@ export async function POST(request: Request, { params }: Context) {
     if (!parsed.success) throw new WorkflowError("Invalid workflow action or brief.");
     const workflow = new Workflow(await loadSession(id));
     const action = parsed.data;
+    if (action.action === "researchBrand") {
+      if (workflow.session.setup) await validateStoreHost(workflow.session.setup.storeUrl);
+      await researchBrand(workflow.session, action.operationId);
+      return Response.json(publicSession(workflow.session));
+    }
+    if (workflow.session.purpose !== "campaign" || !workflow.session.research?.brandKit) throw new WorkflowError("Finish brand setup and choose Make creatives first.", 409);
     switch (action.action) {
+      case "generateCampaign": await workflow.generateCampaign(action.requestId, action.source); break;
+      case "continueCampaign": await workflow.continueCampaign(action.requestId); break;
+      case "setCampaignScope": await workflow.setCampaignScope(action.members); break;
+      case "selectCampaignMember": await workflow.selectCampaignMember(action.productId, action.variantId); break;
+      case "generateCampaignMember": await workflow.generateCampaignMember(action.requestId, action.productId, action.variantId); break;
+      case "refineAd": await workflow.refineAd(action.requestId, action.variantId, action.feedback); break;
+      case "retryCreative": await workflow.retryCreative(action.requestId, action.previousRequestId, action.briefId, action.acknowledgePossibleDuplicate); break;
       case "confirmOffer": await workflow.confirmOffer(action.offerId, action.productId); break;
       case "selectProduct": await workflow.selectProduct(action.productId); break;
       case "correctAsset": await workflow.correctAsset(action.assetId, action.role, action.productId); break;
@@ -44,7 +63,8 @@ export async function POST(request: Request, { params }: Context) {
       case "approveAd": await workflow.approveVariant(action.variantId); break;
       case "reviewAd": await workflow.review(action.variantId); break;
     }
-    return Response.json(publicSession(workflow.session));
+    // The lease is released in finally before the browser can start its next step.
+    return Response.json(publicSession({ ...workflow.session, leaseExpiresAt: undefined }));
   } catch (error) { return apiError(error); }
   finally { await release?.(); }
   });

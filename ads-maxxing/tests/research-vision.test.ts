@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { applyAssessments, classifyResearchAssets, CLASSIFICATION_PROMPT } from "../lib/workflow/research/vision";
 import type { ResearchAsset } from "../lib/workflow/research/contracts";
+import type { Progress } from "../lib/workflow/diagnostics";
 
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCfkAAAAASUVORK5CYII=", "base64");
 const asset = (id: string, known = false): ResearchAsset => ({ id, originalUrl: `https://store.example/${id}.png`, sourceUrl: "https://store.example/products/case", role: known ? "product_photo" : "unknown", productIds: known ? ["product"] : [], variantIds: [], evidence: { sourceUrl: "https://store.example/products/case", quote: "Image in product data", method: known ? "json_ld" : "page", origin: "observed" }, classification: known ? "verified_structure" : "unresolved", eligibleAsProductReference: known, containsMultipleProducts: null, containsPromotionalText: null, width: null, height: null });
@@ -36,9 +37,13 @@ test("vision caps six image downloads, three concurrent, bytes and one classific
 
 test("download/model failure preserves findings and deadline prevents optional spending", async () => {
   const inputs = [asset("known", true), asset("unknown")]; let calls = 0;
+  const events: Progress[] = [];
   const deps = { now: Date.now, download: async () => png, classify: async () => { calls++; throw new Error("unavailable"); } };
-  const failed = await classifyResearchAssets(inputs, [], Date.now() + 120000, deps);
+  const failed = await classifyResearchAssets(inputs, [], Date.now() + 120000, deps, async event => { events.push(event); });
   assert.deepEqual(failed.assets, inputs); assert.match(failed.warnings.join(" "), /unavailable/);
+  assert.deepEqual(events.map(event => event.status), ["started", "completed"]);
+  assert.match(events[1].detail, /Optional check unavailable/);
+  assert.equal(failed.assets[1].eligibleAsProductReference, false);
   await classifyResearchAssets(inputs, [], Date.now() + 20000, deps); assert.equal(calls, 1);
   const oversize = await classifyResearchAssets(inputs, [], Date.now() + 120000, { ...deps, download: async () => Buffer.alloc(1200001) });
   assert.deepEqual(oversize.assets, inputs); assert.equal(calls, 1); assert.ok(oversize.warnings.length);

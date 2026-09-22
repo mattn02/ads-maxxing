@@ -1,10 +1,12 @@
 import { z } from "zod";
+import { generationIntentSchema } from "../generation-contracts";
+import { campaignScopeSchema } from "./scope";
 
 const id = z.string().min(1).max(160);
 const url = z.string().url();
 export const stageSchema = z.enum(["brand_researching", "awaiting_direction", "campaign_researching", "needs_selection", "ready_for_brief"]);
 export const directionSchema = z.object({ text: z.string().min(1).max(2000), origin: z.enum(["user_message", "specific_url", "choice"]), messageId: z.string().optional(), choiceId: z.string().optional(), url: url.optional() });
-export const researchStateSchema = z.object({ stage: stageSchema, direction: directionSchema.optional() });
+export const researchStateSchema = z.object({ stage: stageSchema, direction: directionSchema.optional(), generationIntent: generationIntentSchema.optional() });
 export type ResearchState = z.infer<typeof researchStateSchema>;
 export type Direction = z.infer<typeof directionSchema>;
 export const evidenceSchema = z.object({ sourceUrl: url, quote: z.string().max(4000), method: z.enum(["json_ld", "shopify", "page", "branding", "user"]), origin: z.enum(["observed", "inferred", "user_supplied"]) });
@@ -31,6 +33,7 @@ export const brandKitSchema = z.object({
   typography: z.object({ heading: optionalFinding, body: optionalFinding, renderFont: z.literal("geist-fallback"), substitution: z.string() }),
   voice: optionalFinding, audience: optionalFinding, valueProposition: optionalFinding,
   overrides: z.record(z.string(), z.string()),
+  visualOverrides: z.object({ colors: z.array(z.object({ role: z.string(), value: z.string() })).optional(), selectedLogoAssetId: id.nullable().optional() }).optional(),
 });
 export const offerSchema = z.object({ id, sourceUrl: url, quote: z.string(), displayCopy: z.string(), productIds: z.array(id),
   restrictions: z.string(), checkedAt: z.string(), eligibility: z.enum(["unresolved", "eligible", "expired"]), endsAt: z.string().nullable(), confirmedAt: z.string().optional(), confirmationOrigin: z.literal("user_supplied").optional(),
@@ -40,9 +43,10 @@ export const customerEvidenceSchema = z.object({ id, kind: z.enum(["rating", "te
 });
 export const researchV2FieldsSchema = z.object({
   schemaVersion: z.literal(2), revision: z.number().int().positive(), brandKit: brandKitSchema,
-  campaign: z.object({ direction: directionSchema.nullable(), brandRevision: z.number(), productIds: z.array(id), selectedProductId: id.nullable(), status: stageSchema }),
+  campaign: z.object({ direction: directionSchema.nullable(), brandRevision: z.number(), productIds: z.array(id), selectedProductId: id.nullable(), selectedVariantId: id.nullable().optional(), status: stageSchema, scope: campaignScopeSchema.optional() }),
   products: z.array(productSchema), assets: z.array(assetSchema), offers: z.array(offerSchema), customerEvidence: z.array(customerEvidenceSchema),
-  suggestions: z.array(z.object({ id, label: z.string(), url, origin: z.literal("observed") })),
+  suggestions: z.array(z.object({ id, label: z.string(), url, origin: z.enum(["observed", "user_supplied"]), reason: z.string().optional() })),
+  discoveredLinks: z.array(z.object({ id, label: z.string(), url })).optional(),
   runs: z.array(z.object({ id, scope: z.enum(["brand", "campaign"]), startedAt: z.string(), completedAt: z.string(), attemptedUrls: z.array(url), failedUrls: z.array(url), status: z.enum(["complete", "partial"]), parserVersion: z.string() })),
 });
 export type ResearchV2Fields = z.infer<typeof researchV2FieldsSchema>;

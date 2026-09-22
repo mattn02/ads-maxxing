@@ -347,17 +347,18 @@ test("tool-input failures are distinguished from provider failures without expos
   assert.doesNotMatch(safeError(error), /sensitive|Provider request failed/);
 });
 
-test("structured findings use function tools instead of provider JSON-schema formatting", async () => {
+test("structured findings validate plain JSON without provider tools or schema formatting", async () => {
   const { MockLanguageModelV4 } = await import("ai/test");
   const findings = { voice: "Friendly", audience: "Phone owners", sales: [] };
   const model = new MockLanguageModelV4({ doGenerate: {
-    content: [{ type: "tool-call", toolCallId: "result1", toolName: "submitResult", input: JSON.stringify(findings) }],
-    finishReason: { unified: "tool-calls", raw: undefined }, warnings: [],
+    content: [{ type: "text", text: JSON.stringify(findings) }],
+    finishReason: { unified: "stop", raw: undefined }, warnings: [],
     usage: { inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: 1, text: 1, reasoning: undefined } },
   } });
   assert.deepEqual(await structuredResult({ model, schema: findingsSchema, instructions: "Return findings.", messages: [{ role: "user", content: "A friendly phone store." }] }), findings);
   assert.notEqual(model.doGenerateCalls[0].responseFormat?.type, "json");
-  assert.deepEqual(model.doGenerateCalls[0].toolChoice, { type: "tool", toolName: "submitResult" });
+  assert.equal(model.doGenerateCalls[0].tools, undefined);
+  assert.deepEqual(model.doGenerateCalls[0].toolChoice, { type: "auto" });
 });
 
 test("concierge tool payloads omit provider recovery URLs and failed research never claims completion", async () => {
@@ -420,4 +421,77 @@ test("a slow background pauses before paid scene dispatch and resumes on a fresh
   assert.equal(output.status, "reviewed");
   assert.equal(backgrounds, 1);
   assert.equal(scenes, 1);
+});
+
+test("invalid research arguments stop the SDK loop before another model request", async () => {
+  const { createAgentUIStreamResponse, simulateReadableStream } = await import("ai");
+  const { MockLanguageModelV4 } = await import("ai/test");
+  const { createConcierge } = await import("../lib/workflow/agents/concierge");
+  let researchCalls = 0;
+  const { workflow } = fixture({ research: async () => { researchCalls++; return makeResearch(); } });
+  const model = new MockLanguageModelV4({ doStream: async () => ({
+    stream: simulateReadableStream({ initialDelayInMs: null, chunkDelayInMs: null, chunks: [
+      { type: "tool-call", toolCallId: "bad-research", toolName: "research", input: JSON.stringify({ url: "not a URL" }) },
+      { type: "finish", finishReason: { unified: "tool-calls", raw: undefined }, usage: { inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: 1, text: 1, reasoning: undefined } } },
+    ] }),
+  }) });
+  const agent = createConcierge(workflow, model);
+  const response = await createAgentUIStreamResponse({ agent, experimental_transform: conciergeText(agent.responseText), uiMessages: [{ id: "u", role: "user", parts: [{ type: "text", text: "Research my store" }] }], onError: safeError });
+  const stream = await response.text();
+  assert.equal(model.doStreamCalls.length, 1);
+  assert.equal(researchCalls, 0);
+  assert.match(stream, /Invalid input for research/);
+  assert.match(stream, /The tool did not run/);
+  assert.doesNotMatch(stream, /Provider request failed/);
+});
+
+test("research accepts absent direction fields without granting campaign direction", () => {
+  const parsed = researchInputSchema.parse({ url: "https://store.example", direction: null, choiceId: null });
+  assert.equal(parsed.direction, undefined);
+  assert.equal(parsed.choiceId, undefined);
+  assert.equal(researchInputSchema.parse({ url: "https://store.example", direction: " " }).direction, undefined);
+});
+
+test("rate limit errors have an actionable message without exposing provider payloads", () => {
+  const error = Object.assign(new Error("private provider payload"), { statusCode: 429 });
+  assert.match(safeError(error), /request limit.*Wait a minute/);
+  assert.doesNotMatch(safeError(error), /private provider payload/);
+});
+
+test("the saved Loopy direction call accepts string null URLs and runs authorized research", async () => {
+  const { createAgentUIStreamResponse, simulateReadableStream } = await import("ai");
+  const { MockLanguageModelV4 } = await import("ai/test");
+  const { createConcierge } = await import("../lib/workflow/agents/concierge");
+  const url = "https://www.loopycases.com/collections/iphone-18-products";
+  const choiceId = "choice_3a6323711abac68ac22283c9";
+  let calls = 0;
+  const { workflow, session } = fixture({ research: async (input, options) => {
+    calls++;
+    assert.equal(input.productUrl, null);
+    assert.equal(input.campaignUrl, null);
+    assert.equal(options?.direction?.url, url);
+    const result = makeResearch(); result.campaign!.status = "needs_selection";
+    return result;
+  } });
+  const { research } = await import("../lib/workflow/agents/researcher");
+  session.research = await research({ url: "https://www.loopycases.com/", productUrl: null, campaignUrl: null }, {}, {
+    scrape: async url => ({ ...source, url, links: [] }), discover: async () => [],
+    synthesize: async () => ({ voice: "Friendly", audience: "Phone owners", sales: [] }), now: Date.now,
+  });
+  session.research.suggestions = [{ id: choiceId, label: "iphone 18 products", url, origin: "observed" }];
+  workflow.setUserInput(`[direction:${choiceId}] Research this direction: iphone 18 products`, "choice");
+  const usage = { inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: 1, text: 1, reasoning: undefined } };
+  const model = new MockLanguageModelV4({ doStream: [
+    { stream: simulateReadableStream({ chunks: [
+      { type: "tool-call", toolCallId: "choice-call", toolName: "research", input: JSON.stringify({ url, choiceId, productUrl: "null", campaignUrl: "null" }) },
+      { type: "finish", finishReason: { unified: "tool-calls", raw: undefined }, usage },
+    ] }) },
+    { stream: simulateReadableStream({ chunks: [{ type: "finish", finishReason: { unified: "stop", raw: undefined }, usage }] }) },
+  ] });
+  const agent = createConcierge(workflow, model);
+  const response = await createAgentUIStreamResponse({ agent, experimental_transform: conciergeText(agent.responseText), uiMessages: [{ id: "choice", role: "user", parts: [{ type: "text", text: `[direction:${choiceId}] Research this direction: iphone 18 products` }] }], onError: safeError });
+  const stream = await response.text();
+  assert.equal(calls, 1);
+  assert.match(stream, /Campaign research is saved/);
+  assert.doesNotMatch(stream, /tool-input-error|Provider request failed/);
 });

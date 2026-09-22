@@ -2,6 +2,10 @@ import { requireKey, WorkflowError } from "./validation";
 import { MODEL, BACKGROUND_MODEL, IMAGE_SETTINGS, SCENE_SETTINGS } from "./fal-model";
 import type { ProviderResult } from "./creative/schema";
 export { MODEL, BACKGROUND_MODEL } from "./fal-model";
+export class ImageRequestError extends WorkflowError {
+  constructor(message: string, public readonly outcome: "rejected" | "unknown", status = 502) { super(message, status); }
+}
+export function assertImageConfiguration() { requireKey("FAL_AI_API_KEY"); }
 async function request(model: string, prompt: string, images?: string[]): Promise<ProviderResult> {
   const key = requireKey("FAL_AI_API_KEY");
   const response = await fetch(`https://fal.run/${model}`, {
@@ -13,7 +17,7 @@ async function request(model: string, prompt: string, images?: string[]): Promis
     const failure = await response.json().catch(() => ({}));
     const detail = typeof failure.detail === "string" ? failure.detail : typeof failure.message === "string" ? failure.message : "";
     const reason = /balance|credit|exhausted/i.test(detail) ? "Your fal account needs credits." : response.status === 401 || response.status === 403 ? "Check fal key permissions and model access." : "Inspect this saved attempt before approving a new revision.";
-    throw new WorkflowError(`fal returned HTTP ${response.status}. ${reason}`, 502);
+    throw new ImageRequestError(`fal returned HTTP ${response.status}. ${reason}`, [400, 401, 403, 422, 429].includes(response.status) ? "rejected" : "unknown");
   }
   const result = await response.json();
   if (result.has_nsfw_concepts?.some(Boolean)) throw new WorkflowError("fal flagged this output. Save a new brief with a different scene direction.", 422);

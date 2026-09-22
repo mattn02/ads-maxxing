@@ -2,6 +2,7 @@ import type { BriefInput } from "../schema";
 import type { Research } from "../session-types";
 import { WorkflowError } from "../validation";
 import { canonicalUrl } from "./extract";
+import { scopeForCampaign } from "./scope";
 
 export function groundBrief(data: BriefInput, research: Research, resolveUrls = true) {
   if (research.schemaVersion !== 2 || !research.products || !research.assets) throw new WorkflowError("These legacy photos have not been classified. Research the product again before preparing a new brief.", 409);
@@ -10,6 +11,8 @@ export function groundBrief(data: BriefInput, research: Research, resolveUrls = 
   const asset = research.assets.find(asset => asset.id === data.referenceAssetId);
   if (!product || !asset) throw new WorkflowError("Select a saved product ID and photo ID. Unknown references cannot be used.");
   if (!research.campaign.productIds.includes(product.id)) throw new WorkflowError("This product is outside the selected campaign.");
+  const members = scopeForCampaign(research.campaign, research.products).members;
+  if (!members.some(member => member.productId === product.id && (member.variantId === null || member.variantId === (data.variantId ?? null)))) throw new WorkflowError("This product or variant is outside the included campaign members.");
   if (research.campaign.selectedProductId !== product.id) throw new WorkflowError("Choose this product in the research panel before preparing its brief.");
   if (!asset.eligibleAsProductReference || !["product_photo", "product_lifestyle"].includes(asset.role) || !asset.productIds.includes(product.id) || !product.assetIds.includes(asset.id) || !["verified_structure", "user_confirmed"].includes(asset.classification)) throw new WorkflowError("This image is not a verified photo of the selected product. Assign or choose a valid photo first.");
   const suppliedVariant = research.campaign.direction.url ? new URL(research.campaign.direction.url).searchParams.get("variant") : null;

@@ -167,3 +167,28 @@ test("assigned unsorted photos retain product membership through refresh", async
   assert.equal(corrected.classification, "user_confirmed");
   assert.ok(session.research!.products![0].assetIds.includes(candidate.id));
 });
+
+test("optional synthesis failure leaves saved research and a visible stage diagnostic", async () => {
+  const events: import("../lib/workflow/diagnostics").Progress[] = [];
+  let checkpointed = false;
+  const result = await research(input(), {
+    progress: async event => { events.push(event); },
+    checkpoint: async () => { checkpointed = true; },
+  }, { ...deps([]), synthesize: async () => { throw new Error("hidden payload", { cause: { statusCode: 429 } }); } });
+  assert.ok(checkpointed);
+  assert.ok(result.sources.length > 0);
+  const failure = events.find(event => event.action === "research:synthesis" && event.status === "failed");
+  assert.match(failure?.detail || "", /request limit.*reference/);
+  assert.ok(result.warnings.some(warning => warning.includes(failure!.detail)));
+  assert.doesNotMatch(JSON.stringify(events), /hidden payload/);
+});
+
+test("Shopify collection product links match canonical structured product identity", () => {
+  const alias = `${home}collections/summer/products/case`;
+  const result = extractSource(source(alias, node));
+  assert.equal(result.products.length, 1);
+  assert.equal(result.products[0].title, "Case");
+  assert.ok(result.assets.some(asset => asset.eligibleAsProductReference));
+  const recommendation = extractSource(source(alias, { ...node, url: `${home}products/other` }));
+  assert.equal(recommendation.products.length, 0);
+});

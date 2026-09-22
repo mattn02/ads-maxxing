@@ -1,4 +1,5 @@
-import { generateBackground, generateScene } from "../fal";
+import { generateBackground, generateScene, assertImageConfiguration, ImageRequestError } from "../fal";
+import { safeError } from "../validation";
 import { readAsset, assetProviderUrl, saveComposedGeneration, saveStageAsset } from "../storage";
 import type { Brief, Research } from "../session-types";
 import { renderCreative } from "../creative/render";
@@ -17,13 +18,15 @@ export type ArtistExecution = {
   beforeAttempt: (stage: Stage) => Promise<void>;
   providerResult: (stage: Stage, result: ProviderResult) => Promise<void>;
   checkpoint: (stage: Stage, asset: StageAsset) => Promise<void>;
+  failed?: (stage: Stage, failure: { outcome: "rejected" | "unknown"; message: string }) => Promise<void>;
 };
 export type ArtistDependencies = {
+  preflight?: typeof assertImageConfiguration;
   generateBackground: typeof generateBackground; generateScene: typeof generateScene;
   saveStageAsset: typeof saveStageAsset; readAsset: typeof readAsset; assetProviderUrl: typeof assetProviderUrl;
   render: typeof renderCreative; saveFinal: typeof saveComposedGeneration;
 };
-const defaults: ArtistDependencies = { generateBackground, generateScene, saveStageAsset, readAsset, assetProviderUrl, render: renderCreative, saveFinal: saveComposedGeneration };
+const defaults: ArtistDependencies = { preflight: assertImageConfiguration, generateBackground, generateScene, saveStageAsset, readAsset, assetProviderUrl, render: renderCreative, saveFinal: saveComposedGeneration };
 export async function createAd(brief: Brief, research: Research, execution: ArtistExecution, deps: ArtistDependencies = defaults) {
   await validateCreative(brief, research);
   validatePlan(brief);
@@ -45,8 +48,10 @@ export async function createAd(brief: Brief, research: Research, execution: Arti
     let provider = checkpoint?.provider;
     if (!provider) {
       if (checkpoint?.attemptedAt || checkpoint?.state === "attempted") throw new WorkflowError(`The ${stage} request was already attempted and its outcome is unknown. Inspect the saved attempt; another paid request needs a new approved revision.`, 409);
+      deps.preflight?.();
       await execution.beforeAttempt(stage);
-      provider = await generate();
+      try { provider = await generate(); }
+      catch (error) { await execution.failed?.(stage, { outcome: error instanceof ImageRequestError ? error.outcome : "unknown", message: safeError(error) }); throw error; }
       await execution.providerResult(stage, provider); // Recovery URL before any download/upload.
     }
     const asset = await deps.saveStageAsset({ id: brief.executionPlan![stage].assetId, kind: stage === "background" ? "generated_background" : "generated_scene", ...provider, prompt, inputs: { ...inputs, fingerprint: brief.executionPlan![stage].fingerprint } });

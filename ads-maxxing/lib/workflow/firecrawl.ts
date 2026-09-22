@@ -2,6 +2,7 @@ import type { Product } from "./types";
 import type { Source } from "./session-types";
 import { requireKey, webUrl, WorkflowError } from "./validation";
 import { absolute, pageHint } from "./research/extract";
+import { fetchShopifyProductSource } from "./research/shopify-fetch";
 
 async function firecrawl(endpoint: string, body: object, timeout = 75000) {
   const response = await fetch(`https://api.firecrawl.dev/v2/${endpoint}`, {
@@ -44,7 +45,9 @@ export function normalizeScrape(url: string, result: { data: Record<string, unkn
   };
 }
 export async function scrapePage(url: string, branding = false): Promise<Source> {
-  return normalizeScrape(url, await firecrawl("scrape", { url: webUrl(url), formats: ["markdown", "rawHtml", "links", "images", ...(branding ? ["branding"] : [])], onlyMainContent: false, maxAge: 0, timeout: 60000 }));
+  if (!branding && pageHint(url) === "product") return fetchShopifyProductSource(url);
+  const source = normalizeScrape(url, await firecrawl("scrape", { url: webUrl(url), formats: ["markdown", "rawHtml", "links", "images", ...(branding ? ["branding"] : [])], onlyMainContent: false, maxAge: 0, timeout: 60000 }));
+  return source;
 }
 export async function discoverPages(url: string, search: string): Promise<string[]> {
   const result = await firecrawl("map", { url: webUrl(url), search: search.slice(0, 200), limit: 100, includeSubdomains: false }, 30000);

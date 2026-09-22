@@ -1,4 +1,5 @@
 import { authenticated, persistenceContext, ownerContext } from "@/lib/supabase/server";
+import { userResearchIntent } from "@/lib/workflow/research/intent";
 import { randomUUID } from "node:crypto";
 import { createAgentUIStreamResponse } from "ai";
 import { z } from "zod";
@@ -22,8 +23,11 @@ export async function POST(request: Request) {
     const { id, message } = parsed.data;
     release = await lockSession(id);
     const session = await loadSession(id);
+    if (session.purpose !== "campaign" || !session.research?.brandKit) throw new WorkflowError("Finish brand setup and choose Make creatives first.", 409);
     // The server owns history. Clients cannot inject assistant messages or approval state.
     if (session.messages.some(item => item.id === message.id)) throw new WorkflowError("This message was already submitted. Reload the session before trying again.", 409);
+    const intent = userResearchIntent(message.parts[0].text, message.id, session.research);
+    if (intent.choiceId && !intent.direction) throw new WorkflowError("This direction is no longer available. Choose from the current campaign.", 409);
     const workflow = new Workflow(session);
     workflow.setUserInput(message.parts[0].text, message.id);
     const agent = createConcierge(workflow);

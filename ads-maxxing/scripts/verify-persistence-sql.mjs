@@ -1,6 +1,6 @@
 /** Execute the actual migration against isolated Postgres (PGlite), with minimal Supabase schema stubs. */
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 const modulePath=process.env.PGLITE_MODULE;
@@ -8,9 +8,8 @@ if(!modulePath)throw new Error('Set PGLITE_MODULE to an isolated @electric-sql/p
 const {PGlite}=await import(pathToFileURL(modulePath).href);
 const db=new PGlite();
 await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(bucket_id text,name text);create function storage.foldername(text) returns text[] language sql as $$select string_to_array($1,'/')$$;grant usage on schema public,auth to authenticated;`);
-await db.exec(await readFile(new URL('../supabase/migrations/202609220001_workflow.sql',import.meta.url),'utf8'));
-await db.exec(await readFile(new URL('../supabase/migrations/202609220002_preserve_shared_brand_kit.sql',import.meta.url),'utf8'));
-await db.exec(await readFile(new URL('../supabase/migrations/202609220003_brand_kit_object_guard.sql',import.meta.url),'utf8'));
+const migrationDirectory = new URL('../supabase/migrations/',import.meta.url);
+for (const name of (await readdir(migrationDirectory)).filter(name=>name.endsWith('.sql')).sort()) await db.exec(await readFile(new URL(name,migrationDirectory),'utf8'));
 const owner=randomUUID(),other=randomUUID(),campaign=randomUUID();
 await db.query('insert into auth.users values($1),($2)',[owner,other]);
 const call=async(name,args)=> (await db.query(`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args)).rows[0].result;
@@ -48,8 +47,8 @@ session.brief.backgroundCheckpoint={...session.brief.backgroundCheckpoint,state:
 session.brief.sceneCheckpoint={state:'saved',asset:{id:scene}};
 const variant={id:session.brief.id,imageUrl:`/api/outputs/${session.brief.id}`,brief:structuredClone(session.brief),research:structuredClone(research),status:'pending_review'};
 session.variants=[variant];await save();
-variant.status='reviewed';variant.review={verdict:'pass'};await save();
-variant.status='approved';await save();
+variant.status='reviewed';variant.review={verdict:'pass',createdAt:new Date().toISOString(),checks:[{name:'source_photo',passed:true,detail:'Saved source verified'}]};await save();
+variant.status='approved';variant.acceptance={acceptedAt:new Date().toISOString(),reviewedAt:variant.review.createdAt};await save();
 assert.equal((await db.query('select generation_state,review_status from ad_versions where id=$1',[variant.id])).rows[0].review_status,'approved');
 const originalBrief=session.brief;
 session.brief={...originalBrief,id:randomUUID(),parentVariantId:variant.id,backgroundCheckpoint:undefined,sceneCheckpoint:undefined,executionPlan:{background:{action:'reuse',assetId:bg},scene:{action:'reuse',assetId:scene}}};
@@ -62,6 +61,8 @@ session.research={...session.research,id:randomUUID(),brandKit:{name:'First kit'
 const otherCampaign=randomUUID();await call('create_campaign',[owner,otherCampaign]);const otherLease=await call('claim_campaign',[owner,otherCampaign]);
 const newerResearch={...session.research,id:randomUUID(),brandKit:{name:'Updated kit',overrides:{voice:'Newest user correction'}}};
 await call('commit_campaign',[owner,otherCampaign,otherLease.token,otherLease.revision,{id:otherCampaign,messages:[],events:[],preferences:{},variants:[],research:newerResearch},'loopycases.com',1]);
+// Onboarding/correction owns the shared kit after 004; campaign saves cannot replace it.
+await db.query('update brands set brand_kit=$1 where id=$2',[newerResearch.brandKit,result.brand_id]);
 session.messages=[{id:'older-chat',role:'user',parts:[{type:'text',text:'Review my old ad'}]}];await save();
 assert.equal((await db.query('select brand_kit from brands where id=$1',[result.brand_id])).rows[0].brand_kit.overrides.voice,'Newest user correction');
 session.research={...session.research,id:randomUUID(),brandKit:null};await save();

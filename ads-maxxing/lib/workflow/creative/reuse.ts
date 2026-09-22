@@ -27,6 +27,22 @@ export function validatePlan(brief: Brief) {
   const plan = brief.executionPlan;
   if (!plan || plan.background.fingerprint !== fingerprint(backgroundInputs(brief)) || plan.scene.fingerprint !== fingerprint(sceneInputs(brief, plan.background.assetId))) throw new WorkflowError("The saved generation plan no longer matches this brief. Save and approve a new revision.");
 }
+/** Retry an unfinished revision without discarding completed immutable stages. */
+export function retryExecution(brief: Brief, previous: Brief) {
+  const plan = planExecution(brief);
+  const background = previous.backgroundCheckpoint?.state === "saved" ? previous.backgroundCheckpoint.asset : undefined;
+  if (background && matchesStage(background, plan.background.fingerprint)) {
+    plan.background = { action: "reuse", assetId: background.id, fingerprint: plan.background.fingerprint };
+    brief.backgroundCheckpoint = structuredClone(previous.backgroundCheckpoint);
+  }
+  plan.scene.fingerprint = fingerprint(sceneInputs(brief, plan.background.assetId));
+  const scene = previous.sceneCheckpoint?.state === "saved" ? previous.sceneCheckpoint.asset : undefined;
+  if (scene && matchesStage(scene, plan.scene.fingerprint)) {
+    plan.scene = { action: "reuse", assetId: scene.id, fingerprint: plan.scene.fingerprint };
+    brief.sceneCheckpoint = structuredClone(previous.sceneCheckpoint);
+  }
+  return plan;
+}
 /** Legacy generated records remain readable; new outputs use separate stage provenance. */
 export function matchesVisual(brief: Brief, asset: VisualAsset) {
   return !!brief.design && !!brief.tokens && asset.inputs.researchId === brief.researchId && asset.inputs.productUrl === brief.productUrl && asset.inputs.referenceImage === brief.referenceImage;

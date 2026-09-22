@@ -368,12 +368,20 @@ export function AdsView({
       variant,
     ];
     const versionNumber = history.findIndex((v) => v.id === variant.id) + 1;
+    const deterministicPass = !!variant.review?.checks.length && variant.review.checks.every((check) => check.passed);
+    const canAccept = deterministicPass && (variant.status === "reviewed" || variant.status === "needs_human");
+    const criteria = variant.review ? [
+      { label: "Product appearance", ...variant.review.visual.productFidelity },
+      { label: "Text legibility", ...variant.review.visual.textLegibility },
+      { label: "Claims", ...variant.review.visual.claimAccuracy },
+      { label: "Brand fit", ...variant.review.visual.brandFit },
+    ].filter((criterion) => criterion.status !== "pass") : [];
     return (
       <>
         <Button onClick={() => select(null)}>← All ads</Button>
         <SectionHeading title={variant.brief.headline}>
           <Badge tone={variant.status === "approved" ? "success" : "neutral"}>
-            {statusLabels[variant.status]}
+            {variant.status === "approved" ? "Accepted" : statusLabels[variant.status]}
           </Badge>
         </SectionHeading>
         <div className="ad-detail">
@@ -387,37 +395,29 @@ export function AdsView({
               src={variant.imageUrl}
               alt={`Version ${versionNumber}: ${variant.brief.headline}`}
             />
-            {variant.brief.executionPlan && <p className="muted small">{executionSummary(variant.brief.executionPlan)}</p>}
           </div>
           <div>
             <div className="card">
-              <h2>Compare with the original</h2>
-              <img className="reference" src={variant.sourceAssetId ? `/api/assets/${variant.sourceAssetId}` : variant.referenceImage} alt="Saved original product for fidelity comparison" />
-              <p className="muted small">Check print, contour, openings, defining details and natural contact. Generation can alter product details.</p>
-              <h2>Review findings</h2>
+              <h2>{variant.status === "approved" ? "Ad accepted" : "Review your ad"}</h2>
               <p>
                 {variant.review?.visual.summary ||
                   variant.reviewError ||
                   "The automated review is still pending."}
               </p>
-              {variant.review?.checks.map((c) => (
-                <p key={c.name} className="small">
-                  {c.passed ? "✓" : "!"} <strong>{c.name}</strong> — {c.detail}
-                </p>
-              ))}
+              {criteria.map((criterion) => <p className="review-finding" key={criterion.label}><strong>{criterion.label} · {criterion.status === "uncertain" ? "Needs your judgement" : "Changes needed"}</strong><br />{criterion.reason}</p>)}
+              {variant.review?.checks.filter((check) => !check.passed).map((check) => <p className="review-finding" key={check.name}><strong>{check.name}</strong><br />{check.detail}</p>)}
               <p className="muted small">
-                Automated checks are separate from your final approval.
+                {variant.acceptance ? `Accepted on ${new Date(variant.acceptance.acceptedAt).toLocaleString()}. Automated findings are kept with this version.` : variant.status === "needs_human" && canAccept ? "The automated review is uncertain. Compare the original and accept when you’re satisfied with this creative." : "Your acceptance is separate from the automated checks."}
               </p>
               <div className="actions">
-                <Button onClick={() => feedback(variant)}>Give feedback</Button>
                 <Button
                   primary
-                  disabled={busy || variant.status !== "reviewed"}
+                  disabled={busy || !canAccept}
                   onClick={() =>
                     void action({ action: "approveAd", variantId: variant.id })
                   }
                 >
-                  {variant.status === "approved" ? "Approved ✓" : "Approve ad"}
+                  {variant.status === "approved" ? "Accepted ✓" : "Accept ad"}
                 </Button>
                 {variant.status === "review_failed" && (
                   <Button
@@ -437,7 +437,15 @@ export function AdsView({
               >
                 Download image ↓
               </a>
+              <details className="ad-review-evidence" open={variant.status === "needs_human"}>
+                <summary>Original photo & review details</summary>
+                <img className="reference" src={variant.sourceAssetId ? `/api/assets/${variant.sourceAssetId}` : variant.referenceImage} alt="Saved original product for comparison" />
+                <p className="small muted">Compare the shape, colors, branding, and visible product details.</p>
+                {variant.review?.checks.map((check) => <p className="small" key={check.name}>{check.passed ? "✓" : "!"} <strong>{check.name}</strong> — {check.detail}</p>)}
+                <Button disabled={busy} onClick={() => feedback(variant)}>Discuss this ad in chat</Button>
+              </details>
             </div>
+            <RefinementForm key={variant.id} variantId={variant.id} busy={busy} action={action} />
             <div className="card">
               <h2>Version history</h2>
               {history.map((v, i) => (
@@ -449,7 +457,7 @@ export function AdsView({
                   onClick={() => select(v.id)}
                 >
                   Version {i + 1}
-                  <span>{statusLabels[v.status]}</span>
+                  <span>{v.status === "approved" ? "Accepted" : statusLabels[v.status]}</span>
                 </button>
               ))}
             </div>
@@ -487,7 +495,7 @@ export function AdsView({
           <option value="">All statuses</option>
           {Object.entries(statusLabels).map(([s, label]) => (
             <option key={s} value={s}>
-              {label}
+              {s === "approved" ? "Accepted" : label}
             </option>
           ))}
         </select>
@@ -520,7 +528,7 @@ export function AdsView({
                 </div>
                 <div className="ad-caption">
                   <Badge tone={v.status === "approved" ? "success" : "neutral"}>
-                    {statusLabels[v.status]}
+                    {v.status === "approved" ? "Accepted" : statusLabels[v.status]}
                   </Badge>
                   <h3>{v.brief.headline}</h3>
                   <p className="muted small">
@@ -535,4 +543,23 @@ export function AdsView({
       )}
     </>
   );
+}
+
+function RefinementForm({ variantId, busy, action }: {
+  variantId: string;
+  busy: boolean;
+  action: (value: WorkflowAction) => Promise<boolean>;
+}) {
+  const [feedback, setFeedback] = useState("");
+  return <form className="card ad-refinement" onSubmit={async (event) => {
+    event.preventDefault();
+    if (busy || !feedback.trim()) return;
+    if (await action({ action: "refineAd", requestId: crypto.randomUUID(), variantId, feedback: feedback.trim() })) setFeedback("");
+  }}>
+    <h2>Make it yours</h2>
+    <label htmlFor={`feedback-${variantId}`}>What would you change?</label>
+    <textarea id={`feedback-${variantId}`} value={feedback} onChange={(event) => setFeedback(event.target.value)} rows={3} maxLength={2000} disabled={busy} placeholder="Shorten the headline, use a warmer background…" />
+    <p className="small muted">Creates a new version and keeps this one.</p>
+    <Button primary disabled={busy || !feedback.trim()}>Create revision →</Button>
+  </form>;
 }

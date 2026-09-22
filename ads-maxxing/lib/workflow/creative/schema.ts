@@ -23,7 +23,7 @@ export function templateGeometry(template: DesignSpec["template"]) {
 export type Stage = "background" | "scene";
 export type StageAsset = { id: string; kind: "generated_background" | "generated_scene"; inputs: Record<string, unknown>; prompt: string; model: string; seed?: number; createdAt: string };
 export type ProviderResult = { imageUrl: string; model: string; seed?: number; requestId?: string };
-export type StageCheckpoint = { state: "attempted" | "output_pending_storage" | "saved"; attemptedAt?: string; provider?: ProviderResult; asset?: StageAsset };
+export type StageCheckpoint = { state: "attempted" | "output_pending_storage" | "saved"; attemptedAt?: string; provider?: ProviderResult; asset?: StageAsset; failure?: { outcome: "rejected" | "unknown"; message: string } };
 export type StagePlan = { action: "generate" | "reuse"; assetId: string; fingerprint: string };
 export type ExecutionPlan = Record<Stage, StagePlan>;
 export function executionSummary(plan?: ExecutionPlan) {
@@ -35,7 +35,7 @@ export const brandTokensSchema = z.object({
   fontId: z.literal("geist-fallback"),
 });
 export type BrandTokens = z.infer<typeof brandTokensSchema>;
-export const RENDERER_VERSION = 2;
+export const RENDERER_VERSION = 3;
 export type VisualInputs = {
   researchId: string; productUrl: string; referenceImage: string; visualDirection: string;
   model: string; background: string; accent: string;

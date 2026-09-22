@@ -8,14 +8,15 @@ const researchUrl = z.string().trim().transform(value => {
   const url = link?.[1] ?? value;
   return /^(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:[/?#][^\s]*)?$/i.test(url) ? `https://${url}` : url;
 }).pipe(z.string().url().refine(value => /^https?:\/\//i.test(value), "Use an HTTP or HTTPS URL."));
-const optionalResearchUrl = z.union([researchUrl, z.string().trim().length(0), z.null()])
-  .optional().transform(value => value || null);
+const absentResearchUrl = z.string().trim().refine(value => /^(?:null|none)?$/i.test(value), "Use null when no URL is supplied.");
+const optionalResearchUrl = z.union([researchUrl, absentResearchUrl, z.null()])
+  .optional().transform(value => !value || /^(null|none)$/i.test(value) ? null : value);
 const optionalId = z.string().trim().nullish().transform(value => !value || /^(null|none)$/i.test(value) ? null : value);
 export const researchInputSchema = z.object({
   url: researchUrl.describe("Store URL as plain text."),
   productUrl: optionalResearchUrl.describe("Optional product page URL; use null when absent."),
-  direction: z.string().trim().min(1).max(2000).optional(),
-  choiceId: z.string().max(160).optional(),
+  direction: z.string().trim().max(2000).nullable().transform(value => value || undefined).optional(),
+  choiceId: z.string().trim().max(160).nullable().transform(value => value || undefined).optional(),
   campaignUrl: optionalResearchUrl.describe("Optional campaign page URL; use null when absent."),
 });
 export const findingsSchema = z.object({

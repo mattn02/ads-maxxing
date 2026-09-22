@@ -629,6 +629,10 @@ label:first-child {
 .activity-card p {
   font-size: 10px;
 }
+.research-activity { display: block; overflow-wrap: anywhere; }
+.research-activity summary { cursor: pointer; font-weight: 600; }
+.research-activity ol { padding-left: 18px; max-height: 280px; overflow-y: auto; }
+.research-activity li { margin-top: 10px; }
 .chat-brief {
   padding: 16px;
   border: 1px solid #dce1d3;
@@ -1185,4 +1189,107 @@ legend {
 input[type="checkbox"] {
   width: auto;
   margin-right: 8px;
+}
+
+/* Focused brand setup and the editable creative foundation. */
+.workspace-loading { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; }
+.brand-onboarding { max-width: 760px; margin: clamp(24px, 8vh, 100px) auto; }
+.brand-onboarding h1 { font-size: clamp(32px, 4vw, 52px); line-height: 1.12; letter-spacing: -.04em; margin: 18px 0; }
+.setup-description { max-width: 560px; line-height: 1.7; font-size: 17px; }
+.brand-onboarding form { margin-top: 36px; }
+.setup-url-row { display: flex; gap: 10px; align-items: center; }
+.setup-url-row input { flex: 1; min-width: 0; margin: 0; }
+.setup-url-row button { white-space: nowrap; }
+.setup-expectations { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 60px; border-top: 1px solid var(--border); padding-top: 24px; }
+.setup-expectations p { font-size: 13px; opacity: .65; line-height: 1.6; }
+.setup-progress { padding: 32px 0; font-size: 20px; }
+.setup-progress .pulse { margin-right: 12px; }
+.brand-summary { max-width: 840px; margin: 16px auto 60px; }
+.summary-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.summary-heading h1 { font-size: clamp(28px, 4vw, 44px); margin: 12px 0; }
+.summary-logo { max-width: 150px; max-height: 80px; object-fit: contain; }
+.summary-actions { margin: 24px 0; }
+.summary-editor label { display: block; margin-top: 16px; }
+.summary-editor fieldset { border: 1px solid var(--border); border-radius: 10px; margin: 20px 0; }
+.summary-editor .color-editor { display: inline-flex; align-items: center; gap: 12px; margin: 8px 20px 8px 0; }
+.color-editor input { width: 54px; height: 36px; padding: 3px; margin: 0; }
+.logo-options { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
+.logo-options button { border: 1px solid #ccc; border-radius: 8px; padding: 12px; background: white; }
+.logo-options button[aria-pressed="true"] { outline: 2px solid #254c3b; }
+.logo-options img { width: 96px; height: 56px; object-fit: contain; }
+.observed-links { display: flex; flex-wrap: wrap; gap: 12px 20px; margin: 20px 0; }
+.direction-choices { display: grid; gap: 10px; margin: 16px 0; }
+.direction-choices button { text-align: left; white-space: normal; }
+.workspace-toast { position: fixed; bottom: 20px; left: 20px; right: 20px; z-index: 50; background: #fff2ef; border: 1px solid #cd9c91; padding: 16px; border-radius: 12px; }
+
+/* Campaign intent and saved progress stay in the main workspace. */
+.brand-positioning { max-width: 680px; line-height: 1.7; }
+.campaign-direction { max-width: 840px; margin: 36px auto; }
+.campaign-direction h2 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -.035em; margin: 10px 0; }
+.campaign-direction > p { max-width: 650px; line-height: 1.7; }
+.campaign-direction form { margin-top: 24px; }
+.campaign-direction form > label { display: block; margin: 24px 0 10px; }
+.campaign-suggestions { border: 0; padding: 0; margin: 0; display: grid; gap: 10px; }
+.campaign-choice { display: flex; align-items: flex-start; gap: 14px; padding: 18px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); cursor: pointer; }
+.campaign-choice.is-selected { border-color: #416f51; background: #f0f4eb; }
+.campaign-choice input { flex: 0 0 auto; width: 16px; height: 16px; margin: 2px 0 0; accent-color: #416f51; }
+.campaign-choice strong, .campaign-choice small { display: block; }
+.campaign-choice small { margin-top: 6px; color: var(--muted); line-height: 1.6; }
+.campaign-launch { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 20px; }
+.campaign-launch p { max-width: 400px; line-height: 1.6; }
+.campaign-launch button { flex-shrink: 0; }
+.brand-foundation { border-top: 1px solid var(--border); padding-top: 20px; }
+.brand-foundation > summary { margin-bottom: 20px; font-size: 13px; }
+.campaign-progress { max-width: 840px; margin: 24px auto; }
+.campaign-progress-heading { display: flex; align-items: center; gap: 16px; }
+.campaign-progress-heading h2 { margin: 8px 0; }
+.campaign-progress.is-paused { border-color: #d2c6a8; }
+.campaign-activity { border-top: 1px solid var(--border); margin-top: 24px; padding-top: 16px; font-size: 12px; }
+.campaign-activity ol { padding-left: 18px; line-height: 1.8; overflow-wrap: anywhere; }
+.campaign-activity li { margin: 8px 0; color: var(--muted); }
+.retry-acknowledgement { display: flex; align-items: flex-start; gap: 12px; margin: 20px 0; font-size: 13px; line-height: 1.6; }
+.retry-acknowledgement input { width: 16px; height: 16px; flex: 0 0 auto; margin: 3px 0; }
+.campaign-products { margin-top: 32px; }
+.campaign-products-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+.campaign-products-heading > .button { flex-shrink: 0; }
+.campaign-product-group { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 16px; }
+.campaign-product-group h3 { font-size: 14px; margin: 8px 0; }
+.campaign-member { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; }
+.campaign-member strong { font-size: 12px; font-weight: 500; }
+.campaign-member p { margin: 5px 0 0; }
+.campaign-member > .button, .campaign-member > .badge { flex-shrink: 0; }
+.campaign-selection { border-top: 1px solid var(--border); margin-top: 24px; padding-top: 20px; }
+.campaign-selection > label { display: block; margin-bottom: 10px; }
+.campaign-selection-group { border: 1px solid var(--border); border-radius: 8px; margin-top: 12px; padding: 12px 16px; }
+.campaign-selection-group summary { font-size: 13px; }
+.campaign-member-option { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; padding: 12px 0; }
+.campaign-member-option input { width: 16px; height: 16px; margin: 0; flex: 0 0 auto; }
+.ad-refinement label { display: block; margin: 16px 0 10px; }
+.ad-review-evidence { border-top: 1px solid var(--border); margin-top: 20px; padding-top: 16px; font-size: 12px; }
+.ad-review-evidence > img { display: block; margin-top: 16px; }
+.card .review-finding { border-left: 2px solid #b2a377; padding-left: 12px; margin: 16px 0; line-height: 1.7; }
+@media (max-width: 600px) {
+  .campaign-launch { flex-direction: column; align-items: stretch; gap: 8px; }
+  .campaign-choice { padding: 14px; }
+  .campaign-direction { margin-top: 24px; }
+  .campaign-products-heading, .campaign-member { flex-direction: column; align-items: stretch; gap: 10px; }
+  .campaign-member > .badge { align-self: flex-start; }
+}
+@media (max-width: 800px) {
+  .setup-url-row { flex-direction: column; align-items: stretch; }
+  .setup-expectations { grid-template-columns: 1fr; gap: 12px; margin-top: 36px; }
+  .setup-workspace .sidebar { display: flex; min-height: auto; flex-direction: row; flex-wrap: wrap; gap: 10px; padding: 12px; }
+  .setup-workspace .sidebar nav { display: flex; flex-wrap: wrap; }
+  .setup-workspace .sidebar .nav-label, .setup-workspace .sidebar-bottom { display: none; }
+  .setup-workspace { display: flex; flex-direction: column; }
+  .setup-workspace .workspace-main { flex: 1; min-height: 0; }
+  .summary-logo { max-width: 90px; }
+}
+@media (max-width: 800px) {
+  .setup-workspace .sidebar { flex-shrink: 0; align-items: center; max-height: 180px; border-bottom: 1px solid var(--border); }
+  .setup-workspace .wordmark { font-size: 20px; padding: 0 6px; }
+  .setup-workspace .sidebar > .button { margin-left: auto; }
+  .setup-workspace .sidebar nav { order: 3; width: 100%; margin: 0; gap: 6px; }
+  .setup-workspace .nav-item { width: auto; font-size: 12px; padding: 8px 12px; margin: 0; }
+  .campaign-bar { flex-wrap: wrap; gap: 8px; }
 }

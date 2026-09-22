@@ -38,6 +38,7 @@ export function ChatPanel({
 }) {
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    if (messages.length === 1 && messages[0].role === "assistant") return;
     end.current?.scrollIntoView({ block: "nearest" });
   }, [messages, busy]);
   return (
@@ -50,14 +51,6 @@ export function ChatPanel({
         </div>
       </div>
       <div className="chat-messages" aria-label="Conversation">
-        <div className="message assistant">
-          <span className="message-author">CREATIVE PARTNER</span>
-          <p>Let’s make something worth stopping for.</p>
-          <p className="muted">
-            Share your store URL. I’ll research your brand and products, then
-            we’ll choose a direction together.
-          </p>
-        </div>
         {messages.map((m) => (
           <div key={m.id} className={`message ${m.role}`}>
             <span className="message-author">
@@ -93,6 +86,10 @@ export function ChatPanel({
                 state === "output-error" ||
                 !!(output && typeof output === "object" && "error" in output);
               const complete = state === "output-available";
+              const detail = output && typeof output === "object" && "error" in output && typeof output.error === "string"
+                ? output.error
+                : "errorText" in p && typeof p.errorText === "string" ? p.errorText : null;
+              const running = busy && m.id === messages.at(-1)?.id;
               return (
                 <div className="activity-card" key={i}>
                   <span aria-hidden="true">
@@ -104,10 +101,10 @@ export function ChatPanel({
                     </strong>
                     <p className="small muted">
                       {failed
-                        ? "Couldn’t complete this step. See the response for details."
+                        ? detail || "Couldn’t complete this step. Try again when you’re ready."
                         : complete
                           ? "Saved to your workspace"
-                          : "In progress"}
+                          : running ? "In progress" : "Interrupted. Refresh saved state before trying again."}
                     </p>
                   </div>
                 </div>
@@ -115,10 +112,26 @@ export function ChatPanel({
             })}
           </div>
         ))}
+        {!!session?.events.some(event => event.action.startsWith("research:")) && (
+          <details className="activity-card research-activity">
+            <summary>Research activity</summary>
+            <ol className="small" aria-live="polite">
+              {session.events.filter(event => event.action.startsWith("research:")).slice(-18).map((event, index) => (
+                <li key={`${event.at}-${index}`}>
+                  <time>{new Date(event.at).toLocaleTimeString()}</time>{" · "}
+                  {event.status === "failed" ? "Failed" : event.status === "completed" ? "Done" : "Started"}{" · "}
+                  {event.detail}
+                </li>
+              ))}
+            </ol>
+          </details>
+        )}
         {session?.brief && (
           <div className="chat-brief">
             <Badge tone="warning">
-              {session.brief.generationAttemptedAt
+              {session.researchState?.generationIntent
+                ? "Campaign creative"
+                : session.brief.generationAttemptedAt
                 ? "Generation attempted"
                 : session.brief.approvedAt
                   ? "Approved brief"
@@ -126,9 +139,9 @@ export function ChatPanel({
             </Badge>
             <h3>{session.brief.headline}</h3>
             <p className="muted small">
-              Review the exact product photo, headline, and creative direction.
+              You can adjust the product photo, headline, and creative direction.
             </p>
-            <Button onClick={openBrief}>Open current brief →</Button>
+            <Button disabled={busy} onClick={openBrief}>Edit creative details →</Button>
           </div>
         )}
         {busy && (

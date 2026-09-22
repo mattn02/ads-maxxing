@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { randomUUID } from "node:crypto";
+import sharp from "sharp";
 import { Workflow, type WorkflowDependencies } from "../lib/workflow/service";
 import { productResearch } from "./research-fixture";
 import { assembleResearch } from "../lib/workflow/agents/researcher";
@@ -19,6 +20,19 @@ const legacyResearch = assembleResearch([source], { voice: "Playful", audience: 
 const research = { ...productResearch(source), sales: legacyResearch.sales };
 const makeBrief = (): Brief => ({ productId: research.products![0].id, referenceAssetId: research.assets!.find(asset => asset.originalUrl === source.images[0])!.id, id: randomUUID(), researchId: research.id, productUrl: source.url, referenceImage: source.images[0], headline: "Hold on to color", cta: "Shop now", direction: "Overall intent", saleId: null, feedback: "", parentVariantId: null, design: { ...DEFAULT_DESIGN }, tokens: resolveBrandTokens(research) });
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCfkAAAAASUVORK5CYII=", "base64");
+
+test("both templates retain scene details at either portrait edge outside the copy panel", async () => {
+  const scene = await sharp(Buffer.from('<svg width="576" height="1024"><rect width="576" height="1024" fill="#ff00ff"/><rect width="576" height="64" fill="#00ff00"/><rect y="960" width="576" height="64" fill="#0000ff"/></svg>')).png().toBuffer();
+  for (const template of ["copy-top", "photo-top"] as const) {
+    const brief = makeBrief(); brief.design = { ...brief.design!, template };
+    const output = await renderCreative({ brief, research, tokens: brief.tokens!, visualBytes: scene });
+    const { data, info } = await sharp(output).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    const top = template === "copy-top" ? 448 : 0;
+    const pixel = (y: number) => [...data.subarray((y * info.width + 288) * info.channels, (y * info.width + 288) * info.channels + 3)];
+    assert.deepEqual(pixel(top + 10), [0, 255, 0], `${template} preserves the top scene detail`);
+    assert.deepEqual(pixel(top + 566), [0, 0, 255], `${template} preserves the bottom scene detail`);
+  }
+});
 
 test("font fitting retains punctuation and complete offer conditions; overflow and missing glyphs are actionable", async () => {
   const brief = makeBrief();

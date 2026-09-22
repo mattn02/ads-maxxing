@@ -1,0 +1,1210 @@
+{
+  "url": "https://www.loopycases.com/products/berry-pink.js",
+  "fetchedAt": "2026-09-22T06:07:58.476Z",
+  "product": {
+    "id": 8112859381943,
+    "handle": "berry-pink",
+    "url": "/products/berry-pink",
+    "title": "Berry Pink",
+    "options": [
+      {
+        "name": "Brand",
+        "position": 1,
+        "values": [
+          "Apple",
+          "Samsung"
+        ]
+      },
+      {
+        "name": "Phone Type",
+        "position": 2,
+        "values": [
+          "iPhone 18 Pro Max & 17 Pro Max (6.9\" Screen)",
+          "iPhone 18 Pro & 17 Pro (6.3\" Screen)",
+          "iPhone 17 Pro Max (6.9\" Screen)",
+          "iPhone 17 Pro (6.3\" Screen)",
+          "iPhone 17 Air (6.5\" Screen)",
+          "iPhone 17 (6.3\" Screen)",
+          "iPhone 17e, 16e, 14, & 13 (6.1\" Screen)",
+          "iPhone 16 Pro Max (6.9\" Screen)",
+          "iPhone 16 Plus (6.7\" Screen)",
+          "iPhone 16 Pro (6.3\" Screen)",
+          "iPhone 16 (6.1\" Screen)",
+          "iPhone 15 Pro Max (6.7\" Screen)",
+          "iPhone 15 Plus (6.7\" Screen)",
+          "iPhone 15 Pro (6.1\" Screen)",
+          "iPhone 15 (6.1\" Screen)",
+          "iPhone 14 Pro Max (6.7\" Screen)",
+          "iPhone 14 Plus (6.7\" Screen)",
+          "iPhone 14 Pro (6.1\" Screen)",
+          "iPhone 13 Pro Max & 12 Pro Max (6.7\" Screen)",
+          "iPhone 13 Pro (6.1\" Screen)",
+          "iPhone 12 Pro & 12 (6.1\" Screen)",
+          "Galaxy S26 Ultra (6.9\" Screen)",
+          "Galaxy S26 Plus (6.7\" Screen)",
+          "Galaxy S26 (6.3\" Screen)",
+          "Galaxy S25 Ultra (6.9\" Screen)",
+          "Galaxy S25 Plus (6.7\" Screen)",
+          "Galaxy S25 (6.2\" Screen)",
+          "Galaxy S24 Ultra (6.8\" Screen)",
+          "Galaxy S24 Plus (6.7\" Screen)",
+          "Galaxy S24 (6.2\" Screen)"
+        ]
+      },
+      {
+        "name": "Orientation",
+        "position": 3,
+        "values": [
+          "Righty",
+          "Lefty",
+          "Ambidextrous"
+        ]
+      }
+    ],
+    "images": [
+      "//cdn.shopify.com/s/files/1/0199/7596/files/hero-images10_24d3e6aa-cb06-4561-b170-729f7685ad94.jpg?v=1748965240",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/hero-images11_42c74770-3fbd-4fff-aee1-ee77f8e92e43.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/hero-images23.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/hero-images24.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/hero-images30.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/12-6.1-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/13-6.7-Pro-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/16-6.1-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/16-6.3-Pro-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/16-6.7-Plus-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/16-6.9-Pro-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/13-6.1-Pro-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/14-6.1-Pro-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/14-6.7-Plus-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/14-6.7-Pro-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/15-6.1-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/15-6.1-Pro-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/15-6.7-Plus-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/15-6.7-Pro-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/13-6.1-Pro-Berry-Pink_1.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/14-6.1-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/S24-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/S24-Plus-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/S24-Ultra-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/S25-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/S25-Plus-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/S25-Ultra-Berry-Pink.jpg?v=1759326347",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/berry-pink-now-avail.jpg?v=1765208692",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/17-Air-Berry-Pink.jpg?v=1765901596",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/17-6.3-Pro-Berry-Pink.jpg?v=1768492876",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/17-6.9-Pro-Berry-Pink.jpg?v=1768492876",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/17-Berry-Pink.jpg?v=1768492876",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/berry-pink-coming-soon.jpg?v=1772030773",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/S26-Berry-Pink.jpg?v=1772810457",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/S26-Plus-Berry-Pink.jpg?v=1772810457",
+      "//cdn.shopify.com/s/files/1/0199/7596/files/S26-Ultra-Berry-Pink.jpg?v=1772810457"
+    ],
+    "featured_image": "//cdn.shopify.com/s/files/1/0199/7596/files/hero-images10_24d3e6aa-cb06-4561-b170-729f7685ad94.jpg?v=1748965240",
+    "variants": [
+      {
+        "id": 49138599919799,
+        "title": "Apple / iPhone 18 Pro Max & 17 Pro Max (6.9\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 18 Pro Max & 17 Pro Max (6.9\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 18 Pro Max & 17 Pro Max (6.9\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 44126403788983,
+          "product_id": 8112859381943,
+          "position": 31,
+          "created_at": "2026-01-15T10:01:15-06:00",
+          "updated_at": "2026-01-15T10:01:16-06:00",
+          "alt": "The iPhone 17 Pro Max Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/17-6.9-Pro-Berry-Pink.jpg?v=1768492876",
+          "variant_ids": [
+            45507393355959,
+            45507393388727,
+            49138599919799,
+            49138613649591
+          ]
+        }
+      },
+      {
+        "id": 49138613649591,
+        "title": "Apple / iPhone 18 Pro Max & 17 Pro Max (6.9\" Screen) / Lefty",
+        "options": [
+          "Apple",
+          "iPhone 18 Pro Max & 17 Pro Max (6.9\" Screen)",
+          "Lefty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 18 Pro Max & 17 Pro Max (6.9\" Screen)",
+        "option3": "Lefty",
+        "featured_image": {
+          "id": 44126403788983,
+          "product_id": 8112859381943,
+          "position": 31,
+          "created_at": "2026-01-15T10:01:15-06:00",
+          "updated_at": "2026-01-15T10:01:16-06:00",
+          "alt": "The iPhone 17 Pro Max Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/17-6.9-Pro-Berry-Pink.jpg?v=1768492876",
+          "variant_ids": [
+            45507393355959,
+            45507393388727,
+            49138599919799,
+            49138613649591
+          ]
+        }
+      },
+      {
+        "id": 49138630230199,
+        "title": "Apple / iPhone 18 Pro & 17 Pro (6.3\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 18 Pro & 17 Pro (6.3\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 18 Pro & 17 Pro (6.3\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 44126403821751,
+          "product_id": 8112859381943,
+          "position": 30,
+          "created_at": "2026-01-15T10:01:15-06:00",
+          "updated_at": "2026-01-15T10:01:16-06:00",
+          "alt": "The iPhone 17 Pro Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/17-6.3-Pro-Berry-Pink.jpg?v=1768492876",
+          "variant_ids": [
+            45507394109623,
+            45507394142391,
+            49138630230199,
+            49138636456119
+          ]
+        }
+      },
+      {
+        "id": 49138636456119,
+        "title": "Apple / iPhone 18 Pro & 17 Pro (6.3\" Screen) / Lefty",
+        "options": [
+          "Apple",
+          "iPhone 18 Pro & 17 Pro (6.3\" Screen)",
+          "Lefty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 18 Pro & 17 Pro (6.3\" Screen)",
+        "option3": "Lefty",
+        "featured_image": {
+          "id": 44126403821751,
+          "product_id": 8112859381943,
+          "position": 30,
+          "created_at": "2026-01-15T10:01:15-06:00",
+          "updated_at": "2026-01-15T10:01:16-06:00",
+          "alt": "The iPhone 17 Pro Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/17-6.3-Pro-Berry-Pink.jpg?v=1768492876",
+          "variant_ids": [
+            45507394109623,
+            45507394142391,
+            49138630230199,
+            49138636456119
+          ]
+        }
+      },
+      {
+        "id": 45507393355959,
+        "title": "Apple / iPhone 17 Pro Max (6.9\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 17 Pro Max (6.9\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 17 Pro Max (6.9\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 44126403788983,
+          "product_id": 8112859381943,
+          "position": 31,
+          "created_at": "2026-01-15T10:01:15-06:00",
+          "updated_at": "2026-01-15T10:01:16-06:00",
+          "alt": "The iPhone 17 Pro Max Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/17-6.9-Pro-Berry-Pink.jpg?v=1768492876",
+          "variant_ids": [
+            45507393355959,
+            45507393388727,
+            49138599919799,
+            49138613649591
+          ]
+        }
+      },
+      {
+        "id": 45507393388727,
+        "title": "Apple / iPhone 17 Pro Max (6.9\" Screen) / Lefty",
+        "options": [
+          "Apple",
+          "iPhone 17 Pro Max (6.9\" Screen)",
+          "Lefty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 17 Pro Max (6.9\" Screen)",
+        "option3": "Lefty",
+        "featured_image": {
+          "id": 44126403788983,
+          "product_id": 8112859381943,
+          "position": 31,
+          "created_at": "2026-01-15T10:01:15-06:00",
+          "updated_at": "2026-01-15T10:01:16-06:00",
+          "alt": "The iPhone 17 Pro Max Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/17-6.9-Pro-Berry-Pink.jpg?v=1768492876",
+          "variant_ids": [
+            45507393355959,
+            45507393388727,
+            49138599919799,
+            49138613649591
+          ]
+        }
+      },
+      {
+        "id": 45507394109623,
+        "title": "Apple / iPhone 17 Pro (6.3\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 17 Pro (6.3\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 17 Pro (6.3\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 44126403821751,
+          "product_id": 8112859381943,
+          "position": 30,
+          "created_at": "2026-01-15T10:01:15-06:00",
+          "updated_at": "2026-01-15T10:01:16-06:00",
+          "alt": "The iPhone 17 Pro Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/17-6.3-Pro-Berry-Pink.jpg?v=1768492876",
+          "variant_ids": [
+            45507394109623,
+            45507394142391,
+            49138630230199,
+            49138636456119
+          ]
+        }
+      },
+      {
+        "id": 45507394142391,
+        "title": "Apple / iPhone 17 Pro (6.3\" Screen) / Lefty",
+        "options": [
+          "Apple",
+          "iPhone 17 Pro (6.3\" Screen)",
+          "Lefty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 17 Pro (6.3\" Screen)",
+        "option3": "Lefty",
+        "featured_image": {
+          "id": 44126403821751,
+          "product_id": 8112859381943,
+          "position": 30,
+          "created_at": "2026-01-15T10:01:15-06:00",
+          "updated_at": "2026-01-15T10:01:16-06:00",
+          "alt": "The iPhone 17 Pro Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/17-6.3-Pro-Berry-Pink.jpg?v=1768492876",
+          "variant_ids": [
+            45507394109623,
+            45507394142391,
+            49138630230199,
+            49138636456119
+          ]
+        }
+      },
+      {
+        "id": 45507394175159,
+        "title": "Apple / iPhone 17 Air (6.5\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 17 Air (6.5\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 17 Air (6.5\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 43918983528631,
+          "product_id": 8112859381943,
+          "position": 29,
+          "created_at": "2025-12-16T10:13:15-06:00",
+          "updated_at": "2025-12-16T10:13:16-06:00",
+          "alt": "The iPhone 17 Air Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/17-Air-Berry-Pink.jpg?v=1765901596",
+          "variant_ids": [
+            45507394175159
+          ]
+        }
+      },
+      {
+        "id": 45507394764983,
+        "title": "Apple / iPhone 17 (6.3\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 17 (6.3\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 17 (6.3\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 44126403756215,
+          "product_id": 8112859381943,
+          "position": 32,
+          "created_at": "2026-01-15T10:01:15-06:00",
+          "updated_at": "2026-01-15T10:01:16-06:00",
+          "alt": "The iPhone 17 Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/17-Berry-Pink.jpg?v=1768492876",
+          "variant_ids": [
+            45507394764983,
+            45507394830519
+          ]
+        }
+      },
+      {
+        "id": 45507394830519,
+        "title": "Apple / iPhone 17 (6.3\" Screen) / Lefty",
+        "options": [
+          "Apple",
+          "iPhone 17 (6.3\" Screen)",
+          "Lefty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 17 (6.3\" Screen)",
+        "option3": "Lefty",
+        "featured_image": {
+          "id": 44126403756215,
+          "product_id": 8112859381943,
+          "position": 32,
+          "created_at": "2026-01-15T10:01:15-06:00",
+          "updated_at": "2026-01-15T10:01:16-06:00",
+          "alt": "The iPhone 17 Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/17-Berry-Pink.jpg?v=1768492876",
+          "variant_ids": [
+            45507394764983,
+            45507394830519
+          ]
+        }
+      },
+      {
+        "id": 44904219836599,
+        "title": "Apple / iPhone 17e, 16e, 14, & 13 (6.1\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 17e, 16e, 14, & 13 (6.1\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 17e, 16e, 14, & 13 (6.1\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 41514184605879,
+          "product_id": 8112859381943,
+          "position": 21,
+          "created_at": "2025-06-05T12:13:36-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 14 Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/14-6.1-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904219836599
+          ]
+        }
+      },
+      {
+        "id": 44904219214007,
+        "title": "Apple / iPhone 16 Pro Max (6.9\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 16 Pro Max (6.9\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 16 Pro Max (6.9\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 41494085304503,
+          "product_id": 8112859381943,
+          "position": 11,
+          "created_at": "2025-06-04T13:39:20-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 16 Pro Max Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/16-6.9-Pro-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904219214007,
+            44904219246775
+          ]
+        }
+      },
+      {
+        "id": 44904219246775,
+        "title": "Apple / iPhone 16 Pro Max (6.9\" Screen) / Lefty",
+        "options": [
+          "Apple",
+          "iPhone 16 Pro Max (6.9\" Screen)",
+          "Lefty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 16 Pro Max (6.9\" Screen)",
+        "option3": "Lefty",
+        "featured_image": {
+          "id": 41494085304503,
+          "product_id": 8112859381943,
+          "position": 11,
+          "created_at": "2025-06-04T13:39:20-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 16 Pro Max Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/16-6.9-Pro-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904219214007,
+            44904219246775
+          ]
+        }
+      },
+      {
+        "id": 44904219279543,
+        "title": "Apple / iPhone 16 Plus (6.7\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 16 Plus (6.7\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 16 Plus (6.7\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 41494085402807,
+          "product_id": 8112859381943,
+          "position": 10,
+          "created_at": "2025-06-04T13:39:20-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 16 Plus Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/16-6.7-Plus-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904219279543
+          ]
+        }
+      },
+      {
+        "id": 44904219312311,
+        "title": "Apple / iPhone 16 Pro (6.3\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 16 Pro (6.3\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 16 Pro (6.3\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 41494085337271,
+          "product_id": 8112859381943,
+          "position": 9,
+          "created_at": "2025-06-04T13:39:20-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 16 Pro Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/16-6.3-Pro-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904219312311,
+            44904219345079
+          ]
+        }
+      },
+      {
+        "id": 44904219345079,
+        "title": "Apple / iPhone 16 Pro (6.3\" Screen) / Lefty",
+        "options": [
+          "Apple",
+          "iPhone 16 Pro (6.3\" Screen)",
+          "Lefty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 16 Pro (6.3\" Screen)",
+        "option3": "Lefty",
+        "featured_image": {
+          "id": 41494085337271,
+          "product_id": 8112859381943,
+          "position": 9,
+          "created_at": "2025-06-04T13:39:20-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 16 Pro Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/16-6.3-Pro-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904219312311,
+            44904219345079
+          ]
+        }
+      },
+      {
+        "id": 44904219377847,
+        "title": "Apple / iPhone 16 (6.1\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 16 (6.1\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 16 (6.1\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 41494085370039,
+          "product_id": 8112859381943,
+          "position": 8,
+          "created_at": "2025-06-04T13:39:20-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 16 Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/16-6.1-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904219377847
+          ]
+        }
+      },
+      {
+        "id": 44904219443383,
+        "title": "Apple / iPhone 15 Pro Max (6.7\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 15 Pro Max (6.7\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 15 Pro Max (6.7\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 41511913554103,
+          "product_id": 8112859381943,
+          "position": 19,
+          "created_at": "2025-06-05T09:25:59-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 15 Pro Max Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/15-6.7-Pro-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904219443383,
+            44904219476151
+          ]
+        }
+      },
+      {
+        "id": 44904219476151,
+        "title": "Apple / iPhone 15 Pro Max (6.7\" Screen) / Lefty",
+        "options": [
+          "Apple",
+          "iPhone 15 Pro Max (6.7\" Screen)",
+          "Lefty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 15 Pro Max (6.7\" Screen)",
+        "option3": "Lefty",
+        "featured_image": {
+          "id": 41511913554103,
+          "product_id": 8112859381943,
+          "position": 19,
+          "created_at": "2025-06-05T09:25:59-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 15 Pro Max Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/15-6.7-Pro-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904219443383,
+            44904219476151
+          ]
+        }
+      },
+      {
+        "id": 44904219508919,
+        "title": "Apple / iPhone 15 Plus (6.7\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 15 Plus (6.7\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 15 Plus (6.7\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 41511913619639,
+          "product_id": 8112859381943,
+          "position": 18,
+          "created_at": "2025-06-05T09:25:59-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 15 Plus Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/15-6.7-Plus-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904219508919
+          ]
+        }
+      },
+      {
+        "id": 44904219541687,
+        "title": "Apple / iPhone 15 Pro (6.1\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 15 Pro (6.1\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 15 Pro (6.1\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 41511913685175,
+          "product_id": 8112859381943,
+          "position": 17,
+          "created_at": "2025-06-05T09:25:59-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 15 Pro Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/15-6.1-Pro-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904219541687,
+            44904219574455
+          ]
+        }
+      },
+      {
+        "id": 44904219574455,
+        "title": "Apple / iPhone 15 Pro (6.1\" Screen) / Lefty",
+        "options": [
+          "Apple",
+          "iPhone 15 Pro (6.1\" Screen)",
+          "Lefty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 15 Pro (6.1\" Screen)",
+        "option3": "Lefty",
+        "featured_image": {
+          "id": 41511913685175,
+          "product_id": 8112859381943,
+          "position": 17,
+          "created_at": "2025-06-05T09:25:59-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 15 Pro Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/15-6.1-Pro-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904219541687,
+            44904219574455
+          ]
+        }
+      },
+      {
+        "id": 44904219607223,
+        "title": "Apple / iPhone 15 (6.1\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 15 (6.1\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 15 (6.1\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 41511913455799,
+          "product_id": 8112859381943,
+          "position": 16,
+          "created_at": "2025-06-05T09:25:59-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 15 Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/15-6.1-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904219607223
+          ]
+        }
+      },
+      {
+        "id": 44904219639991,
+        "title": "Apple / iPhone 14 Pro Max (6.7\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 14 Pro Max (6.7\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 14 Pro Max (6.7\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 41511913488567,
+          "product_id": 8112859381943,
+          "position": 15,
+          "created_at": "2025-06-05T09:25:59-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 14 Pro Max Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/14-6.7-Pro-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904219639991,
+            44904219672759
+          ]
+        }
+      },
+      {
+        "id": 44904219672759,
+        "title": "Apple / iPhone 14 Pro Max (6.7\" Screen) / Lefty",
+        "options": [
+          "Apple",
+          "iPhone 14 Pro Max (6.7\" Screen)",
+          "Lefty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 14 Pro Max (6.7\" Screen)",
+        "option3": "Lefty",
+        "featured_image": {
+          "id": 41511913488567,
+          "product_id": 8112859381943,
+          "position": 15,
+          "created_at": "2025-06-05T09:25:59-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 14 Pro Max Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/14-6.7-Pro-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904219639991,
+            44904219672759
+          ]
+        }
+      },
+      {
+        "id": 44904219705527,
+        "title": "Apple / iPhone 14 Plus (6.7\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 14 Plus (6.7\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 14 Plus (6.7\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 41511913586871,
+          "product_id": 8112859381943,
+          "position": 14,
+          "created_at": "2025-06-05T09:25:59-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 14 Plus Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/14-6.7-Plus-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904219705527
+          ]
+        }
+      },
+      {
+        "id": 44904219771063,
+        "title": "Apple / iPhone 14 Pro (6.1\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 14 Pro (6.1\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 14 Pro (6.1\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 41511913652407,
+          "product_id": 8112859381943,
+          "position": 13,
+          "created_at": "2025-06-05T09:25:59-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 14 Pro Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/14-6.1-Pro-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904219771063,
+            44904219803831
+          ]
+        }
+      },
+      {
+        "id": 44904219803831,
+        "title": "Apple / iPhone 14 Pro (6.1\" Screen) / Lefty",
+        "options": [
+          "Apple",
+          "iPhone 14 Pro (6.1\" Screen)",
+          "Lefty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 14 Pro (6.1\" Screen)",
+        "option3": "Lefty",
+        "featured_image": {
+          "id": 41511913652407,
+          "product_id": 8112859381943,
+          "position": 13,
+          "created_at": "2025-06-05T09:25:59-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 14 Pro Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/14-6.1-Pro-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904219771063,
+            44904219803831
+          ]
+        }
+      },
+      {
+        "id": 44904219902135,
+        "title": "Apple / iPhone 13 Pro Max & 12 Pro Max (6.7\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 13 Pro Max & 12 Pro Max (6.7\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 13 Pro Max & 12 Pro Max (6.7\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 41494085435575,
+          "product_id": 8112859381943,
+          "position": 7,
+          "created_at": "2025-06-04T13:39:20-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 13 Pro Max Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/13-6.7-Pro-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904219902135
+          ]
+        }
+      },
+      {
+        "id": 44904219967671,
+        "title": "Apple / iPhone 13 Pro (6.1\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 13 Pro (6.1\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 13 Pro (6.1\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 41514184573111,
+          "product_id": 8112859381943,
+          "position": 20,
+          "created_at": "2025-06-05T12:13:36-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 13 Pro Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/13-6.1-Pro-Berry-Pink_1.jpg?v=1759326347",
+          "variant_ids": [
+            44904219967671
+          ]
+        }
+      },
+      {
+        "id": 48855234347191,
+        "title": "Apple / iPhone 12 Pro & 12 (6.1\" Screen) / Righty",
+        "options": [
+          "Apple",
+          "iPhone 12 Pro & 12 (6.1\" Screen)",
+          "Righty"
+        ],
+        "option1": "Apple",
+        "option2": "iPhone 12 Pro & 12 (6.1\" Screen)",
+        "option3": "Righty",
+        "featured_image": {
+          "id": 41494085468343,
+          "product_id": 8112859381943,
+          "position": 6,
+          "created_at": "2025-06-04T13:39:20-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The iPhone 12 Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/12-6.1-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            48855234347191
+          ]
+        }
+      },
+      {
+        "id": 46968800313527,
+        "title": "Samsung / Galaxy S26 Ultra (6.9\" Screen) / Ambidextrous",
+        "options": [
+          "Samsung",
+          "Galaxy S26 Ultra (6.9\" Screen)",
+          "Ambidextrous"
+        ],
+        "option1": "Samsung",
+        "option2": "Galaxy S26 Ultra (6.9\" Screen)",
+        "option3": "Ambidextrous",
+        "featured_image": {
+          "id": 44564414136503,
+          "product_id": 8112859381943,
+          "position": 36,
+          "created_at": "2026-03-06T09:20:55-06:00",
+          "updated_at": "2026-03-06T09:20:57-06:00",
+          "alt": "The Samsung Galaxy S26 Ultra Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/S26-Ultra-Berry-Pink.jpg?v=1772810457",
+          "variant_ids": [
+            46968800313527
+          ]
+        }
+      },
+      {
+        "id": 46968801919159,
+        "title": "Samsung / Galaxy S26 Plus (6.7\" Screen) / Ambidextrous",
+        "options": [
+          "Samsung",
+          "Galaxy S26 Plus (6.7\" Screen)",
+          "Ambidextrous"
+        ],
+        "option1": "Samsung",
+        "option2": "Galaxy S26 Plus (6.7\" Screen)",
+        "option3": "Ambidextrous",
+        "featured_image": {
+          "id": 44564414202039,
+          "product_id": 8112859381943,
+          "position": 35,
+          "created_at": "2026-03-06T09:20:55-06:00",
+          "updated_at": "2026-03-06T09:20:57-06:00",
+          "alt": "The Samsung Galaxy S26 Plus Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/S26-Plus-Berry-Pink.jpg?v=1772810457",
+          "variant_ids": [
+            46968801919159
+          ]
+        }
+      },
+      {
+        "id": 46968802246839,
+        "title": "Samsung / Galaxy S26 (6.3\" Screen) / Ambidextrous",
+        "options": [
+          "Samsung",
+          "Galaxy S26 (6.3\" Screen)",
+          "Ambidextrous"
+        ],
+        "option1": "Samsung",
+        "option2": "Galaxy S26 (6.3\" Screen)",
+        "option3": "Ambidextrous",
+        "featured_image": {
+          "id": 44564414169271,
+          "product_id": 8112859381943,
+          "position": 34,
+          "created_at": "2026-03-06T09:20:55-06:00",
+          "updated_at": "2026-03-06T09:20:57-06:00",
+          "alt": "The Samsung Galaxy S26 Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/S26-Berry-Pink.jpg?v=1772810457",
+          "variant_ids": [
+            46968802246839
+          ]
+        }
+      },
+      {
+        "id": 44904220098743,
+        "title": "Samsung / Galaxy S25 Ultra (6.9\" Screen) / Ambidextrous",
+        "options": [
+          "Samsung",
+          "Galaxy S25 Ultra (6.9\" Screen)",
+          "Ambidextrous"
+        ],
+        "option1": "Samsung",
+        "option2": "Galaxy S25 Ultra (6.9\" Screen)",
+        "option3": "Ambidextrous",
+        "featured_image": {
+          "id": 41514184278199,
+          "product_id": 8112859381943,
+          "position": 27,
+          "created_at": "2025-06-05T12:13:36-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The Samsung Galaxy S25 Ultra Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/S25-Ultra-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904220098743
+          ]
+        }
+      },
+      {
+        "id": 44904220131511,
+        "title": "Samsung / Galaxy S25 Plus (6.7\" Screen) / Ambidextrous",
+        "options": [
+          "Samsung",
+          "Galaxy S25 Plus (6.7\" Screen)",
+          "Ambidextrous"
+        ],
+        "option1": "Samsung",
+        "option2": "Galaxy S25 Plus (6.7\" Screen)",
+        "option3": "Ambidextrous",
+        "featured_image": {
+          "id": 41514184343735,
+          "product_id": 8112859381943,
+          "position": 26,
+          "created_at": "2025-06-05T12:13:36-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The Samsung Galaxy S25 Plus Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/S25-Plus-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904220131511
+          ]
+        }
+      },
+      {
+        "id": 44904220164279,
+        "title": "Samsung / Galaxy S25 (6.2\" Screen) / Ambidextrous",
+        "options": [
+          "Samsung",
+          "Galaxy S25 (6.2\" Screen)",
+          "Ambidextrous"
+        ],
+        "option1": "Samsung",
+        "option2": "Galaxy S25 (6.2\" Screen)",
+        "option3": "Ambidextrous",
+        "featured_image": {
+          "id": 41514184409271,
+          "product_id": 8112859381943,
+          "position": 25,
+          "created_at": "2025-06-05T12:13:36-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The Samsung Galaxy S25 Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/S25-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904220164279
+          ]
+        }
+      },
+      {
+        "id": 44904220197047,
+        "title": "Samsung / Galaxy S24 Ultra (6.8\" Screen) / Ambidextrous",
+        "options": [
+          "Samsung",
+          "Galaxy S24 Ultra (6.8\" Screen)",
+          "Ambidextrous"
+        ],
+        "option1": "Samsung",
+        "option2": "Galaxy S24 Ultra (6.8\" Screen)",
+        "option3": "Ambidextrous",
+        "featured_image": {
+          "id": 41514184474807,
+          "product_id": 8112859381943,
+          "position": 24,
+          "created_at": "2025-06-05T12:13:36-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The Samsung Galaxy S24 Ultra Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/S24-Ultra-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904220197047
+          ]
+        }
+      },
+      {
+        "id": 44904220229815,
+        "title": "Samsung / Galaxy S24 Plus (6.7\" Screen) / Ambidextrous",
+        "options": [
+          "Samsung",
+          "Galaxy S24 Plus (6.7\" Screen)",
+          "Ambidextrous"
+        ],
+        "option1": "Samsung",
+        "option2": "Galaxy S24 Plus (6.7\" Screen)",
+        "option3": "Ambidextrous",
+        "featured_image": {
+          "id": 41514184638647,
+          "product_id": 8112859381943,
+          "position": 23,
+          "created_at": "2025-06-05T12:13:36-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The Samsung Galaxy S24 Plus Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/S24-Plus-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904220229815
+          ]
+        }
+      },
+      {
+        "id": 44904220262583,
+        "title": "Samsung / Galaxy S24 (6.2\" Screen) / Ambidextrous",
+        "options": [
+          "Samsung",
+          "Galaxy S24 (6.2\" Screen)",
+          "Ambidextrous"
+        ],
+        "option1": "Samsung",
+        "option2": "Galaxy S24 (6.2\" Screen)",
+        "option3": "Ambidextrous",
+        "featured_image": {
+          "id": 41514184507575,
+          "product_id": 8112859381943,
+          "position": 22,
+          "created_at": "2025-06-05T12:13:36-05:00",
+          "updated_at": "2025-10-01T08:45:47-05:00",
+          "alt": "The Samsung Galaxy S24 Berry Pink Loopy Case.",
+          "width": 720,
+          "height": 960,
+          "src": "https://cdn.shopify.com/s/files/1/0199/7596/files/S24-Berry-Pink.jpg?v=1759326347",
+          "variant_ids": [
+            44904220262583
+          ]
+        }
+      }
+    ]
+  }
+}
