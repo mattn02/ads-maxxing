@@ -194,9 +194,9 @@ export class Workflow {
         beforeAttempt: async stage => {
           if (brief[`${stage}Checkpoint`]?.attemptedAt) throw new WorkflowError(`The ${stage} request was already attempted.`, 409);
           // The HTTP handler has five minutes. Leave the full 150-second fal
-          // timeout plus 30 seconds to persist its result before dispatching.
+          // timeout plus two 30-second persistence calls (attempt and result).
           // A saved background can resume in a fresh request without paying again.
-          if (this.requestDeadline - (this.deps.now ?? Date.now)() < 180_000) {
+          if (this.requestDeadline - (this.deps.now ?? Date.now)() < 210_000) {
             throw new WorkflowError("The request is nearly out of time. Saved stages are retained; use Finish saved creative to continue in a fresh request. No new image request was made.", 409);
           }
           const now = new Date().toISOString();
