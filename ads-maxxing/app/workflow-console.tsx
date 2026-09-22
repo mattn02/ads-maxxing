@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
+import { scheduleInitialMessage } from "@/lib/workspace/initial-message";
 import type { ConciergeMessage } from "@/lib/workflow/agents/concierge";
 import type { Session, Variant } from "@/lib/workflow/session-types";
 import {
@@ -131,8 +132,9 @@ function Workbench({
   });
   useEffect(() => {
     if (initial && firstMessage && !sent.current) {
-      sent.current = true;
-      void sendMessage({ text: firstMessage });
+      return scheduleInitialMessage(sent, () => {
+        void sendMessage({ text: firstMessage });
+      });
     }
   }, [initial, firstMessage, sendMessage]);
   const busy =
