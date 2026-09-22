@@ -1,5 +1,6 @@
 /** Explicit, idempotent import. Never edits source files or invokes research/image providers. */
 import { readFile, readdir } from "node:fs/promises";
+import { isDeepStrictEqual } from "node:util";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { persistenceContext, rows, rpc } from "../lib/supabase/server";
@@ -39,7 +40,19 @@ for(const filename of (await readdir(path.join(directory,'sessions'))).filter(f=
    const release=await lockSession(campaignId);
    try{
     const saved=await loadSession(campaignId);
-    if(saved.variants.length===group.variants.length&&saved.variants.every(v=>outputs.has(v.id))&&saved.research?.id===group.research.id){console.log(`Already imported ${campaignId}`);return;}
+    if(saved.variants.length===group.variants.length&&saved.variants.every(v=>outputs.has(v.id))&&saved.research?.id===group.research.id){
+     if(!isDeepStrictEqual(saved.research,parseResearchSnapshot(group.research,group.research.schemaVersion??1)))throw new Error(`Conflicting research payload in ${campaignId}`);
+     for(const originalVariant of group.variants){
+      const current=saved.variants.find(v=>v.id===originalVariant.id)!;
+      const [asset]=await rows<{content_hash:string}>("assets",`id=eq.${originalVariant.id}&select=content_hash`);
+      if(asset?.content_hash!==createHash("sha256").update(outputs.get(originalVariant.id)!).digest("hex"))throw new Error(`Conflicting final bytes for ${originalVariant.id}`);
+      const originalContent={...originalVariant.brief};const currentContent={...current.brief} as Record<string,unknown>;
+      delete originalContent.visualCheckpoint;delete currentContent.legacyImported;
+      if(originalContent.parentVariantId&&!group.variants.some(v=>v.id===originalContent.parentVariantId))originalContent.parentVariantId=null;
+      if(!isDeepStrictEqual(currentContent,originalContent))throw new Error(`Conflicting historical brief ${originalVariant.id}`);
+     }
+     console.log(`Already imported ${campaignId}`);return;
+    }
     if(saved.variants.length)throw new Error(`Conflicting partially populated campaign ${campaignId}; inspect before rerun.`);
     const session:Session={...saved,messages:original.messages,events:original.events,preferences:original.preferences,variants:[]};
     for(const r of snapshots.values()){session.research=r;await saveSession(session);}

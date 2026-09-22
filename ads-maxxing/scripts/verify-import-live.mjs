@@ -15,5 +15,10 @@ const a=makeResearch('loopycases.com'),b=makeResearch('shop.example.com');const 
 const session={id:randomUUID(),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),messages:[],preferences:{},events:[],variants,research:a};
 const file=path.join(dir,'sessions',session.id+'.json');const content=JSON.stringify(session);await fs.writeFile(file,content);for(const v of variants)await fs.writeFile(path.join(dir,v.id+'.png'),png);
 for(const apply of [false,true,true]){const result=spawnSync(process.execPath,['--import','tsx','scripts/import-local.ts','--owner',auth.user.id,'--directory',dir,...(apply?['--apply']:[])],{cwd:process.cwd(),env:process.env,encoding:'utf8'});process.stdout.write(result.stdout);if(result.status!==0)throw Error(result.stderr);}
-if(await fs.readFile(file,'utf8')!==content)throw Error('Importer changed source');console.log('PASS import dry run, mixed-brand split, real repeated import, source unchanged.');
+if(await fs.readFile(file,'utf8')!==content)throw Error('Importer changed source');
+variants[0].brief.headline='Conflicting edited legacy source';await fs.writeFile(file,JSON.stringify(session));
+const conflict=spawnSync(process.execPath,['--import','tsx','scripts/import-local.ts','--owner',auth.user.id,'--directory',dir,'--apply'],{cwd:process.cwd(),env:process.env,encoding:'utf8'});
+await fs.writeFile(file,content);
+if(conflict.status===0||!conflict.stderr.includes('Conflicting historical brief'))throw Error('Conflicting import was not rejected');
+console.log('PASS import dry run, mixed-brand split, real repeated import, conflict rejection, source unchanged.');
 }main().catch(e=>{console.error(e.message);process.exitCode=1;});
