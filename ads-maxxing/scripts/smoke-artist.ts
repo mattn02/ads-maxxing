@@ -1,56 +1,55 @@
-/** Explicit opt-in: one paid fal visual and two reviewer calls, in an isolated demo session. */
+/** Bounded paid provider feasibility probe. Local artifacts are diagnostics, not production persistence. */
 import assert from "node:assert/strict";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { createAd } from "../lib/workflow/agents/artist";
-import { reviewAd } from "../lib/workflow/agents/reviewer";
-import { assembleResearch } from "../lib/workflow/agents/researcher";
-import { generateImage } from "../lib/workflow/fal";
-import { renderCreative } from "../lib/workflow/creative/render";
+import { randomUUID } from "node:crypto";
+import { generateBackground, generateScene } from "../lib/workflow/fal";
+import { backgroundPrompt } from "../lib/workflow/creative/background";
+import { scenePrompt } from "../lib/workflow/creative/scene";
 import { DEFAULT_DESIGN } from "../lib/workflow/creative/schema";
-import { readImage, readVisual, saveComposedGeneration, saveVisual } from "../lib/workflow/storage";
-import { createSession, loadSession, saveSession } from "../lib/workflow/sessions";
-import { Workflow, type WorkflowDependencies } from "../lib/workflow/service";
-import type { Source } from "../lib/workflow/session-types";
-import { safeError } from "../lib/workflow/validation";
+import { renderCreative, normalizeScenePng } from "../lib/workflow/creative/render";
+import type { Brief, Research, Source } from "../lib/workflow/session-types";
 
 async function main() {
-  const [sourceFile, referenceImage, consent] = process.argv.slice(2);
-  if (!sourceFile || !referenceImage || consent !== "--allow-one-paid-visual") throw new Error("Usage: node --env-file=.env.local --import tsx scripts/smoke-artist.ts <saved-source.json> <reference-url> --allow-one-paid-visual");
+  const [sourceFile, outputDir, consent] = process.argv.slice(2);
+  if (!sourceFile || !outputDir || consent !== "--allow-three-paid-calls") throw new Error("Usage: node --env-file=<keys> --import tsx scripts/smoke-artist.ts <saved-source.json> <new-output-dir> --allow-three-paid-calls");
+  await mkdir(outputDir); // Refuse an existing run; uncertain calls are never automatically repeated.
   const source: Source = JSON.parse(await readFile(sourceFile, "utf8"));
-  assert.ok(source.images.includes(referenceImage), "Select an image from the saved source");
-  const research = assembleResearch([source], { voice: "Friendly (smoke fixture)", audience: "Phone owners (inferred smoke fixture)", sales: [] });
-  process.env.WORKFLOW_DATA_DIR = path.resolve("local-output/artist-smoke");
-  const marker = path.join(process.env.WORKFLOW_DATA_DIR, "smoke-session.txt");
-  try { await readFile(marker); throw new Error("Smoke already started. Inspect its saved session before another paid run."); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
-  let falCalls = 0;
-  const deps: WorkflowDependencies = {
-    research: async () => research, save: saveSession, readVisual, reviewAd,
-    createAd: (brief, research, execution) => createAd(brief, research, execution, {
-      generate: async (reference, prompt) => { assert.equal(++falCalls, 1, "Only one paid visual is allowed"); return generateImage(reference, prompt); },
-      saveVisual, readVisual, render: renderCreative, saveFinal: saveComposedGeneration,
-    }),
-  };
-  const session = await createSession();
-  await writeFile(marker, session.id);
-  console.log(`Smoke session: ${session.id}`);
-  const workflow = new Workflow(session, deps);
-  await workflow.research({ url: source.url, productUrl: null, campaignUrl: null });
-  const brief = await workflow.proposeBrief({ productUrl: source.url, referenceImage, headline: "Your daily dose of color", cta: "Shop Loopy", saleId: null, parentVariantId: null, direction: "A clean product portrait", feedback: "",
-    design: { ...DEFAULT_DESIGN, visualDirection: "Place the photographed dark cherry case on a cream studio pedestal. Keep its full shape, loop, camera openings and existing markings visible." } });
-  await workflow.approveBrief(brief.id); // Explicitly approved smoke fixture, never an existing user brief.
-  const first = await workflow.generate();
-  console.log(`First output: ${first.id}; review: ${first.status}`);
-  const revision = await workflow.proposeBrief({ ...brief, headline: "Color worth holding on to", parentVariantId: first.id, feedback: "Put the photo first and make the CTA quieter.", design: { ...brief.design!, template: "photo-top", ctaStyle: "outline", reuseVisualFromVariantId: first.id } });
-  await workflow.approveBrief(revision.id);
-  const resumed = new Workflow(await loadSession(session.id), deps);
-  const second = await resumed.generate();
-  assert.equal(falCalls, 1);
-  assert.equal(first.visualAssetId, second.visualAssetId);
-  assert.notDeepEqual(await readImage(first.id), await readImage(second.id));
-  const report = { sessionId: session.id, falCalls, visualAssetId: first.visualAssetId, outputs: [first, second].map(item => ({ id: item.id, status: item.status, review: item.review, reviewError: item.reviewError })) };
-  await writeFile(path.join(process.env.WORKFLOW_DATA_DIR, "smoke-report.json"), JSON.stringify(report, null, 2));
-  console.log(JSON.stringify({ ...report, outputs: report.outputs.map(({ id, status }) => ({ id, status })) }, null, 2));
+  const referenceImage = source.images.find(url => /Dark_Cherry|dark.cherry/i.test(url)) ?? source.images[0];
+  const response = await fetch(referenceImage); assert.ok(response.ok);
+  const sourceBytes = Buffer.from(await response.arrayBuffer());
+  const sourceType = response.headers.get("content-type") ?? "image/jpeg";
+  await writeFile(path.join(outputDir, "source.jpg"), sourceBytes);
+  const sourceData = `data:${sourceType};base64,${sourceBytes.toString("base64")}`;
+  const research: Research = { id: randomUUID(), sources: [source], sales: [], colors: [], voice: "Playful", audience: "Phone owners (inferred)", warnings: [] };
+  const brief: Brief = { id: randomUUID(), researchId: research.id, productUrl: source.url, referenceImage, headline: "Hold on to color", cta: "Shop Loopy", direction: "Loopy smoke", feedback: "", saleId: null, parentVariantId: null, design: structuredClone(DEFAULT_DESIGN), tokens: { background: "#fff7ec", foreground: "#30201a", accent: "#733534", ctaForeground: "#ffffff", fontId: "geist-fallback" } };
+  brief.design!.scene.direction = "Stand the exact reference phone case upright on a cream countertop with the printed back, loop and camera openings clearly visible. Front-facing view of the back, matching the reference.";
+  let calls = 0;
+  const results: unknown[] = [];
+  async function paid(name: string, generate: () => ReturnType<typeof generateBackground>) {
+    assert.ok(++calls <= 3);
+    await writeFile(path.join(outputDir, `${name}-attempt.json`), JSON.stringify({ attemptedAt: new Date().toISOString(), call: calls }));
+    const result = await generate();
+    await writeFile(path.join(outputDir, `${name}-provider.json`), JSON.stringify(result, null, 2));
+    const response = await fetch(result.imageUrl); assert.ok(response.ok);
+    const raw = Buffer.from(await response.arrayBuffer());
+    const bytes = name === "background" ? raw : await normalizeScenePng(raw);
+    assert.equal(bytes.readUInt32BE(16), 576); assert.equal(bytes.readUInt32BE(20), 1024);
+    await writeFile(path.join(outputDir, `${name}.png`), bytes);
+    results.push({ name, model: result.model, seed: result.seed });
+    return bytes;
+  }
+  const background = await paid("background", () => generateBackground(backgroundPrompt(brief)));
+  const backgroundData = `data:image/png;base64,${background.toString("base64")}`;
+  const scene = await paid("simple-scene", () => generateScene(sourceData, backgroundData, scenePrompt(brief)));
+  await writeFile(path.join(outputDir, "simple-ad.png"), await renderCreative({ brief, research, tokens: brief.tokens!, visualBytes: scene }));
+  brief.headline = "Your everyday hold";
+  await writeFile(path.join(outputDir, "copy-revision-ad.png"), await renderCreative({ brief, research, tokens: brief.tokens!, visualBytes: scene }));
+  assert.equal(calls, 2, "copy-only render adds zero calls");
+  brief.design!.scene.direction = "A natural adult hand holds the exact reference case upright, a finger through its real loop. Printed back and camera openings face the camera, loop visible. Preserve the exact case print and color. Keep hand contact plausible without hiding defining details.";
+  const handheld = await paid("handheld-scene", () => generateScene(sourceData, backgroundData, scenePrompt(brief)));
+  await writeFile(path.join(outputDir, "handheld-ad.png"), await renderCreative({ brief, research, tokens: brief.tokens!, visualBytes: handheld }));
+  await writeFile(path.join(outputDir, "report.json"), JSON.stringify({ calls, source: referenceImage, results, callCounts: { firstAd: 2, copyRevision: 0, sceneRevision: 1 }, note: "Provider feasibility only. Inspect fidelity manually; Supabase persistence is not exercised by this diagnostic." }, null, 2));
+  console.log(JSON.stringify({ calls, outputDir }));
 }
-main().catch(error => { console.error(safeError(error)); process.exitCode = 1; });
+main().catch(error => { console.error(error instanceof Error ? error.message : "Smoke failed"); process.exitCode = 1; });

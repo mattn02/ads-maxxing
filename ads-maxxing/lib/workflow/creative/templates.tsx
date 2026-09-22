@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element -- The server PNG renderer embeds saved bytes. */
 import React from "react";
-import type { BrandTokens, DesignSpec, VerifiedLogo } from "./schema";
+import { templateGeometry, type BrandTokens, type DesignSpec, type VerifiedLogo } from "./schema";
 import type { CopyLayout, FittedText } from "./fit";
 import { textRuns } from "./emoji";
 
@@ -16,7 +16,7 @@ function TextLines({ text, alignment = "left" }: { text: FittedText; alignment?:
   </div>;
 }
 function ProductVisual({ bytes }: { bytes: Buffer }) {
-  return <img src={dataUrl(bytes)} alt="" width={576} height={576} style={{ objectFit: "contain", flexShrink: 0 }} />;
+  return <img src={dataUrl(bytes)} alt="" width={576} height={1024} style={{ position: "absolute", left: 0, top: 0, objectFit: "fill" }} />;
 }
 function Logo({ logo }: { logo: VerifiedLogo }) {
   const scale = Math.min(160 / logo.width, 28 / logo.height);
@@ -36,19 +36,16 @@ function OfferTerms({ text, alignment }: { text: FittedText; alignment: DesignSp
 }
 function CopyGroup({ design, tokens, copy, logoBytes }: TemplateProps) {
   return <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: design.alignment === "left" ? "flex-start" : "center", textAlign: design.alignment,
-    width: 576, height: 448, padding: "28px 32px", flexShrink: 0, background: tokens.background }}>
+    position: "absolute", left: 0, top: templateGeometry(design.template).copy.y, width: 576, height: 448, padding: "28px 32px", flexShrink: 0, background: tokens.background }}>
     {logoBytes && <Logo logo={logoBytes} />}
     <Headline text={copy.headline} alignment={design.alignment} />
     <CTA text={copy.cta} design={design} tokens={tokens} />
     {copy.offer && <OfferTerms text={copy.offer} alignment={design.alignment} />}
   </div>;
 }
-const templates = {
-  "copy-top": (props: TemplateProps) => [<CopyGroup key="copy" {...props} />, <ProductVisual key="visual" bytes={props.visualBytes} />],
-  "photo-top": (props: TemplateProps) => [<ProductVisual key="visual" bytes={props.visualBytes} />, <CopyGroup key="copy" {...props} />],
-};
 export function CreativeTemplate(props: TemplateProps) {
-  return <div style={{ display: "flex", flexDirection: "column", width: 576, height: 1024, background: props.tokens.background, color: props.tokens.foreground, fontFamily: "Geist", fontWeight: 400 }}>
-    {templates[props.design.template](props)}
+  return <div style={{ display: "flex", position: "relative", width: 576, height: 1024, background: props.tokens.background, color: props.tokens.foreground, fontFamily: "Geist", fontWeight: 400 }}>
+    <ProductVisual bytes={props.visualBytes} />
+    <CopyGroup {...props} />
   </div>;
 }

@@ -1,4 +1,4 @@
-import type { BrandTokens, DesignSpec, VisualAsset } from "./creative/schema";
+import type { BrandTokens, DesignSpec, VisualAsset, StageAsset } from "./creative/schema";
 
 export type Product = { url: string; title: string; description: string; images: string[]; markdown: string };
 export type Generation = {
@@ -10,6 +10,11 @@ export type Generation = {
   referenceImage: string;
   createdAt: string;
   // Optional only for legacy, full-image generations.
+  sourceAssetId?: string;
+  backgroundAssetId?: string;
+  backgroundAsset?: StageAsset;
+  sceneAssetId?: string;
+  sceneAsset?: StageAsset;
   visualAssetId?: string;
   visualAsset?: VisualAsset;
   design?: DesignSpec;

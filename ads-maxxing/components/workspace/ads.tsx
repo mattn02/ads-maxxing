@@ -2,9 +2,9 @@
 import { useState } from "react";
 import {
   DEFAULT_DESIGN,
+  executionSummary,
   type DesignSpec,
 } from "@/lib/workflow/creative/schema";
-import { compatibleParent } from "@/lib/workflow/creative/reuse";
 import { resolveBrandTokens } from "@/lib/workflow/creative/tokens";
 import type { Brief, Session, Variant } from "@/lib/workflow/session-types";
 import {
@@ -27,10 +27,9 @@ export function CampaignForm({
   const [name, setName] = useState("Evergreen product campaign");
   const [direction, setDirection] = useState("");
   const [photo, setPhoto] = useState("");
-  const photos =
-    session.research?.sources.flatMap((s) =>
-      s.images.map((url) => ({ url, source: s.url, title: s.title })),
-    ) || [];
+  const selectedProduct = session.research?.products?.find(product => product.id === session.research?.campaign?.selectedProductId);
+  const photos = session.research?.assets?.filter(asset => asset.eligibleAsProductReference && asset.productIds.includes(selectedProduct?.id ?? ""))
+    .map(asset => ({ id: asset.id, url: asset.originalUrl, source: selectedProduct!.canonicalUrl, title: selectedProduct!.title })) ?? [];
   return (
     <>
       <SectionHeading
@@ -43,7 +42,7 @@ export function CampaignForm({
           e.preventDefault();
           const selected = photos.find((p) => p.url === photo)!;
           send(
-            `Prepare an initial brief for campaign ${name}. Remember campaign name as a preference. Objective: ${direction}. Exact product page: ${selected.source}. Exact reference photo: ${selected.url}. Do not generate; wait for explicit brief approval.`,
+            `Prepare an initial brief for campaign ${name}. Remember campaign name as a preference. Objective: ${direction}. Product ID: ${selectedProduct!.id}. Reference asset ID: ${selected.id}. Exact product page: ${selected.source}. Exact reference photo: ${selected.url}. Do not generate; wait for explicit brief approval.`,
           );
           cancel();
         }}
@@ -123,17 +122,14 @@ export function BriefEditor({
   const [draft, setDraft] = useState({
     ...brief,
     parentVariantId: completedVariant?.id ?? brief.parentVariantId,
-    design: brief.design ?? { ...DEFAULT_DESIGN },
+    design: brief.design?.version === 2 ? brief.design : structuredClone(DEFAULT_DESIGN),
     tokens:
       brief.tokens ??
       (session.research ? resolveBrandTokens(session.research) : undefined),
   });
-  const [dirty, setDirty] = useState(!brief.design || !brief.tokens);
-  const parent = session.variants.find(
-    (variant) => variant.id === draft.parentVariantId,
-  );
-  const canReuse = compatibleParent(draft, parent);
-  const canFinish = !!brief.visualCheckpoint && !completedVariant;
+  const [dirty, setDirty] = useState(brief.design?.version !== 2 || !brief.tokens);
+  const uncertain = [brief.backgroundCheckpoint, brief.sceneCheckpoint].some(c => c?.state === "attempted" && !c.provider);
+  const canFinish = !uncertain && !!(brief.backgroundCheckpoint || brief.sceneCheckpoint) && !completedVariant;
   function updateDesign(values: Partial<DesignSpec>) {
     update({ design: { ...draft.design, ...values } });
   }
@@ -166,10 +162,10 @@ export function BriefEditor({
       <div className="brief-layout">
         <div className="reference-panel">
           <img
-            src={draft.referenceImage}
+            src={draft.referenceImage === brief.referenceImage && brief.sourceAssetId ? `/api/assets/${brief.sourceAssetId}` : draft.referenceImage}
             alt="Exact product reference for this ad"
           />
-          <Badge>Sourced product photo</Badge>
+          <Badge>{brief.sourceAssetId ? "Saved original photo" : "Source photo needs saving"}</Badge>
           <a href={draft.productUrl} target="_blank" rel="noreferrer">
             View product ↗
           </a>
@@ -264,37 +260,20 @@ export function BriefEditor({
               <option value="solid">Solid</option>
               <option value="outline">Outline · quieter</option>
             </select>
-            <label htmlFor="visual-direction">Visual direction</label>
-            <textarea
-              id="visual-direction"
-              maxLength={1000}
-              value={draft.design.visualDirection}
-              onChange={(event) =>
-                updateDesign({ visualDirection: event.target.value })
-              }
-            />
-            <label>
-              <input
-                type="checkbox"
-                disabled={!canReuse && !draft.design.reuseVisualFromVariantId}
-                checked={!!draft.design.reuseVisualFromVariantId}
-                onChange={(event) =>
-                  updateDesign({
-                    reuseVisualFromVariantId: event.target.checked
-                      ? parent!.id
-                      : null,
-                  })
-                }
-              />{" "}
-              Reuse the parent’s saved visual
-            </label>
-            <p>
-              {draft.design.reuseVisualFromVariantId
-                ? canReuse
-                  ? "Reuse saved visual · no fal generation charge. The composed ad will be reviewed again."
-                  : "The selected visual is incompatible. Restore its photo/direction or turn reuse off and approve a new visual request."
-                : "Generate a new visual · one fal request, followed by composition and review."}
-            </p>
+            <label htmlFor="background-direction">Setting and lighting</label>
+            <textarea id="background-direction" maxLength={1000} value={draft.design.background.direction} onChange={event => updateDesign({ background: { direction: event.target.value } })} />
+            <label htmlFor="scene-direction">Product pose and interaction</label>
+            <textarea id="scene-direction" maxLength={1000} value={draft.design.scene.direction} onChange={event => updateDesign({ scene: { ...draft.design.scene, direction: event.target.value } })} />
+            <label htmlFor="product-scale">Product prominence</label>
+            <select id="product-scale" value={draft.design.scene.productScale} onChange={event => updateDesign({ scene: { ...draft.design.scene, productScale: event.target.value as "standard" | "large" } })}>
+              <option value="standard">Standard</option><option value="large">Large</option>
+            </select>
+            <label htmlFor="variation">New variation</label>
+            <select id="variation" value={draft.variation ?? "auto"} onChange={event => update({ variation: event.target.value as Brief["variation"] })}>
+              <option value="auto">Reuse compatible saved images</option><option value="scene">Another product scene</option><option value="background">Another background and scene</option>
+            </select>
+            <p className="notice">{dirty ? "Save edits to see the updated generation plan before approving." : executionSummary(brief.executionPlan)}</p>
+            {!dirty && brief.executionPlan && <p className="muted small">{Number(brief.executionPlan.background.action === "generate") + Number(brief.executionPlan.scene.action === "generate")} image generation calls planned. Copy is rendered exactly after generation.</p>}
             <p>Font: bundled Geist fallback, not the brand’s actual font. Color emojis use Twemoji.</p>
           </fieldset>
 
@@ -306,35 +285,17 @@ export function BriefEditor({
             onChange={(e) => update({ saleId: e.target.value || null })}
           >
             <option value="">No offer</option>
-            {session.research?.sales.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.description}
-              </option>
-            ))}
+            {session.research?.offers?.filter(offer => offer.eligibility === "eligible" && offer.productIds.includes(draft.productId ?? "")).map(offer => <option key={offer.id} value={offer.id}>{offer.displayCopy}</option>)}
           </select>
           <label htmlFor="reference-photo">Reference photo</label>
-          <select
-            id="reference-photo"
-            value={draft.referenceImage}
-            disabled={busy}
-            onChange={(e) => {
-              const source = session.research?.sources.find((s) =>
-                s.images.includes(e.target.value),
-              );
-              update({
-                referenceImage: e.target.value,
-                productUrl: source?.url || draft.productUrl,
-              });
-            }}
-          >
-            {session.research?.sources.flatMap((s) =>
-              s.images.map((url, i) => (
-                <option key={`${s.url}-${i}`} value={url}>
-                  {s.title} · photo {i + 1}
-                </option>
-              )),
-            )}
+          <select id="reference-photo" value={draft.referenceAssetId ?? ""} disabled={busy} onChange={event => {
+            const asset = session.research?.assets?.find(asset => asset.id === event.target.value);
+            if (asset) update({ referenceAssetId: asset.id, referenceImage: asset.originalUrl });
+          }}>
+            {!draft.referenceAssetId && <option value="">Choose a verified product photo</option>}
+            {session.research?.assets?.filter(asset => asset.eligibleAsProductReference && asset.productIds.includes(draft.productId ?? "")).map((asset, index) => <option key={asset.id} value={asset.id}>Product photo {index + 1} · {asset.role.replaceAll("_", " ")}</option>)}
           </select>
+          <p className="muted small">To advertise another product, select it in Research first.</p>
           <p className="muted small">
             Editing saves a new revision and clears its approval. Existing ads
             stay intact.
@@ -363,13 +324,12 @@ export function BriefEditor({
           </div>
           {canFinish && (
             <p className="notice">
-              The visual is saved. Finishing this creative will not call fal.
+              Saved stages are retained. Continue from the next unfinished step; completed image requests are never repeated.
             </p>
           )}
           {brief.generationAttemptedAt && !canFinish && (
             <p className="notice">
-              Generation was already attempted for this revision. Edit the brief
-              or give feedback to create another.
+              A request was attempted without a saved result. Its outcome may be unknown. Inspect saved events; a new paid attempt needs a new approved revision.
             </p>
           )}
         </form>
@@ -403,9 +363,6 @@ export function AdsView({
       variant,
     ];
     const versionNumber = history.findIndex((v) => v.id === variant.id) + 1;
-    const reusedVersion = history.findIndex(
-      (v) => v.id === variant.brief.design?.reuseVisualFromVariantId,
-    ) + 1;
     return (
       <>
         <Button onClick={() => select(null)}>← All ads</Button>
@@ -425,15 +382,13 @@ export function AdsView({
               src={variant.imageUrl}
               alt={`Version ${versionNumber}: ${variant.brief.headline}`}
             />
-            {!!reusedVersion && (
-              <p className="muted small">
-                Reuses the product visual from Version {reusedVersion}. If the
-                copy and layout are unchanged, the ad will look the same.
-              </p>
-            )}
+            {variant.brief.executionPlan && <p className="muted small">{executionSummary(variant.brief.executionPlan)}</p>}
           </div>
           <div>
             <div className="card">
+              <h2>Compare with the original</h2>
+              <img className="reference" src={variant.sourceAssetId ? `/api/assets/${variant.sourceAssetId}` : variant.referenceImage} alt="Saved original product for fidelity comparison" />
+              <p className="muted small">Check print, contour, openings, defining details and natural contact. Generation can alter product details.</p>
               <h2>Review findings</h2>
               <p>
                 {variant.review?.visual.summary ||

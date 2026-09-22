@@ -1,4 +1,4 @@
-import type { BrandTokens, VisualAsset } from "./creative/schema";
+import type { BrandTokens, VisualAsset, ExecutionPlan, StageCheckpoint } from "./creative/schema";
 import type { UIMessage } from "ai";
 import type { BriefInput, Findings, VisualReview } from "./schema";
 import type { Generation, Product } from "./types";
@@ -31,7 +31,12 @@ export type Brief = BriefInput & {
   approvedAt?: string;
   generationAttemptedAt?: string;
   tokens?: BrandTokens;
-  visualCheckpoint?: VisualAsset;
+  visualCheckpoint?: VisualAsset; // Read-only legacy checkpoint.
+  sourceAssetId?: string;
+  logoSourceAssetId?: string;
+  executionPlan?: ExecutionPlan;
+  backgroundCheckpoint?: StageCheckpoint;
+  sceneCheckpoint?: StageCheckpoint;
 };
 export type CodeCheck = { name: string; passed: boolean; detail: string };
 export type Review = {

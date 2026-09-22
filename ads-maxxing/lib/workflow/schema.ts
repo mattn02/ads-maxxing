@@ -33,6 +33,7 @@ export const briefSchema = z.object({
   referenceAssetId: z.string().optional(),
   variantId: z.string().nullable().optional(),
   logoAssetId: z.string().nullable().optional(),
+  variation: z.enum(["auto", "scene", "background"]).optional().describe("Use auto to reuse compatible assets. scene explicitly requests another scene; background requests another environment and scene."),
   productUrl: z.string().url(),
   referenceImage: z.string().url(),
   headline: z.string().trim().min(1).max(120),
