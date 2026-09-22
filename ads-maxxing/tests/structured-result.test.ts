@@ -5,7 +5,6 @@ import { MockLanguageModelV4 } from "ai/test";
 import { z } from "zod";
 import { structuredResult } from "../lib/workflow/structured-result";
 import { safeError } from "../lib/workflow/validation";
-import { classificationSchema } from "../lib/workflow/research/vision";
 import { visualReviewSchema } from "../lib/workflow/schema";
 
 function textModel(text: string, finishReason: "stop" | "length" = "stop") {
@@ -28,16 +27,31 @@ test("findings accept text JSON through the real SDK boundary without requiring 
   assert.match(JSON.stringify(call.prompt), /JSON schema/);
 });
 
-test("classification and final review validate their real schemas using file image inputs", async () => {
-  const assessment = { assetId: "source", role: "product_photo", containsMultipleProducts: false, containsPromotionalText: false, uncertain: false, reason: "One product" };
+test("provider structured output sends the schema and returns its validated object", async () => {
+  const model = textModel('{"reason":"Visible","passed":true}');
+  assert.deepEqual(await structuredResult({ ...request, model, providerStructuredOutput: true }), { reason: "Visible", passed: true });
+  assert.equal(model.doGenerateCalls.length, 1);
+  assert.equal(model.doGenerateCalls[0].responseFormat?.type, "json");
+  assert.equal(model.doGenerateCalls[0].tools, undefined);
+});
+
+test("provider structured output sanitizes invalid model data without retrying", async t => {
+  const logs: string[] = [];
+  t.mock.method(console, "warn", (message: string) => { logs.push(message); });
+  const model = textModel('{"reason":"Visible","passed":"yes"}');
+  await assert.rejects(structuredResult({ ...request, model, providerStructuredOutput: true }), /invalid structured findings/);
+  assert.equal(model.doGenerateCalls.length, 1);
+  assert.equal(JSON.parse(logs[0]).mode, "provider");
+  assert.doesNotMatch(logs[0], /Visible|yes/);
+});
+
+test("final review validates its real schema using file image inputs", async () => {
   const criterion = { status: "uncertain", reason: "Needs human inspection" };
   const visual = { productFidelity: criterion, textLegibility: criterion, claimAccuracy: criterion, brandFit: criterion, summary: "Inspect the original" };
-  for (const [outputSchema, data] of [[classificationSchema, { assessments: [assessment] }], [visualReviewSchema, visual]] as const) {
-    const model = textModel(JSON.stringify(data));
-    await structuredResult({ model, schema: outputSchema as z.ZodType, instructions: "Inspect the image", messages: [{ role: "user", content: [{ type: "file", data: new Uint8Array([1, 2, 3]), mediaType: "image/png" }] }] });
-    assert.match(JSON.stringify(model.doGenerateCalls[0].prompt), /image\/png/);
-    assert.equal(model.doGenerateCalls.length, 1);
-  }
+  const model = textModel(JSON.stringify(visual));
+  await structuredResult({ model, schema: visualReviewSchema, instructions: "Inspect the image", messages: [{ role: "user", content: [{ type: "file", data: new Uint8Array([1, 2, 3]), mediaType: "image/png" }] }] });
+  assert.match(JSON.stringify(model.doGenerateCalls[0].prompt), /image\/png/);
+  assert.equal(model.doGenerateCalls.length, 1);
 });
 
 test("a complete JSON fence is accepted but malformed, invalid and pseudo-tool findings are rejected without retries", async () => {

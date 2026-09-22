@@ -44,7 +44,7 @@ export function CampaignProgress({ session, busy, error, recover, inspect, refre
             <Button primary onClick={inspect}>Review product details →</Button>
           ) : next?.kind === "retry" || next?.kind === "continue" ? (
             <Button primary disabled={!!next.duplicateRisk && !acknowledged} onClick={() => recover(acknowledged)}>
-              {next.kind === "retry" ? next.briefId ? "Retry image generation" : "Retry this step" : "Continue saved work"}
+              {next?.kind === "retry" ? next.briefId ? "Retry image generation" : "Retry this step" : "Continue saved work"}
             </Button>
           ) : error ? <Button primary onClick={retryStart || refresh}>{retryStart ? "Try again" : "Refresh saved progress"}</Button> : null}
         </div>

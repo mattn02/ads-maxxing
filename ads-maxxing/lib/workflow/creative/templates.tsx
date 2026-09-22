@@ -17,33 +17,39 @@ function TextLines({ text, alignment = "left" }: { text: FittedText; alignment?:
 }
 function ProductVisual({ bytes, design }: { bytes: Buffer; design: DesignSpec }) {
   const visual = templateGeometry(design.template).visual;
-  // Providers can ignore empty-space instructions. Contain the complete scene
-  // in its own slot so an opaque copy panel can never hide product details.
-  return <img src={dataUrl(bytes)} alt="" width={visual.width} height={visual.height} style={{ position: "absolute", left: visual.x, top: visual.y, objectFit: "contain" }} />;
+  return <img src={dataUrl(bytes)} alt="" width={visual.width} height={visual.height} style={{ position: "absolute", left: visual.x, top: visual.y }} />;
 }
 function Logo({ logo }: { logo: VerifiedLogo }) {
   const scale = Math.min(160 / logo.width, 28 / logo.height);
-  return <img src={dataUrl(logo.bytes, logo.mime)} alt="" width={logo.width * scale} height={logo.height * scale} style={{ objectFit: "contain", marginBottom: 12 }} />;
+  return <img src={dataUrl(logo.bytes, logo.mime)} alt="" width={logo.width * scale} height={logo.height * scale} style={{ position: "absolute", left: 32, top: 24, objectFit: "contain" }} />;
 }
 function Headline({ text, alignment }: { text: FittedText; alignment: DesignSpec["alignment"] }) {
   return <div style={{ display: "flex", alignItems: "center", height: 168, width: "100%" }}><TextLines text={text} alignment={alignment} /></div>;
 }
 function CTA({ text, design, tokens }: Pick<TemplateProps, "design" | "tokens"> & { text: FittedText }) {
   const solid = design.ctaStyle === "solid";
-  return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 48, maxWidth: 512, padding: "0 24px", marginTop: 16, borderRadius: 12,
+  return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 48, maxWidth: 512, padding: "0 24px", marginTop: 10, borderRadius: 12,
     border: `2px solid ${solid ? tokens.accent : tokens.foreground}`, background: solid ? tokens.accent : tokens.background,
     color: solid ? tokens.ctaForeground : tokens.foreground, textAlign: "center" }}><TextLines text={text} alignment="center" /></div>;
 }
 function OfferTerms({ text, alignment }: { text: FittedText; alignment: DesignSpec["alignment"] }) {
-  return <div style={{ display: "flex", height: 66, width: "100%", marginTop: 14 }}><TextLines text={text} alignment={alignment} /></div>;
+  return <div style={{ display: "flex", height: 54, width: "100%", marginTop: 6 }}><TextLines text={text} alignment={alignment} /></div>;
+}
+function Price({ text, alignment }: { text: FittedText; alignment: DesignSpec["alignment"] }) {
+  return <div style={{ display: "flex", height: 34, width: "100%", marginTop: 8 }}><TextLines text={text} alignment={alignment} /></div>;
 }
 function CopyGroup({ design, tokens, copy, logoBytes }: TemplateProps) {
-  return <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: design.alignment === "left" ? "flex-start" : "center", textAlign: design.alignment,
-    position: "absolute", left: 0, top: templateGeometry(design.template).copy.y, width: 576, height: 448, padding: "28px 32px", flexShrink: 0, background: tokens.background }}>
+  return <div style={{ display: "flex", flexDirection: "column", alignItems: design.alignment === "left" ? "flex-start" : "center", textAlign: design.alignment,
+    position: "absolute", left: 0, top: 0, width: 576, height: 1024, padding: "24px 32px", flexShrink: 0, background: "transparent" }}>
     {logoBytes && <Logo logo={logoBytes} />}
-    <Headline text={copy.headline} alignment={design.alignment} />
-    <CTA text={copy.cta} design={design} tokens={tokens} />
-    {copy.offer && <OfferTerms text={copy.offer} alignment={design.alignment} />}
+    <div style={{ display: "flex", width: "100%", marginTop: logoBytes ? 40 : 0 }}>
+      <Headline text={copy.headline} alignment={design.alignment} />
+    </div>
+    <div style={{ display: "flex", flexDirection: "column", width: "100%", marginTop: "auto", alignItems: design.alignment === "left" ? "flex-start" : "center" }}>
+      {copy.price && <Price text={copy.price} alignment={design.alignment} />}
+      {copy.offer && <OfferTerms text={copy.offer} alignment={design.alignment} />}
+      <CTA text={copy.cta} design={design} tokens={tokens} />
+    </div>
   </div>;
 }
 export function CreativeTemplate(props: TemplateProps) {

@@ -865,10 +865,34 @@ label:first-child {
   aspect-ratio: 9/16;
   background: #eceee7;
 }
-.ad-thumbnail img {
+.ad-image-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #eceee7;
+}
+.ad-image-frame img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
+  object-position: center;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+.ad-image-frame.is-ready img {
+  opacity: 1;
+}
+.ad-image-state {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
 }
 .ad-caption {
   padding: 14px;
@@ -882,12 +906,11 @@ label:first-child {
   gap: 24px;
   align-items: start;
 }
-.ad-preview {
-  width: 100%;
-  max-height: 70vh;
-  object-fit: contain;
+.ad-preview-frame {
+  width: min(100%, 39.375vh);
+  aspect-ratio: 9/16;
+  margin-inline: auto;
   border-radius: 10px;
-  background: #efeee8;
 }
 .download {
   display: inline-block;
@@ -993,8 +1016,8 @@ label:first-child {
   .reference-panel img {
     height: 200px;
   }
-  .ad-preview {
-    max-height: 500px;
+  .ad-preview-frame {
+    width: min(100%, 281.25px);
   }
   .resize-handle {
     display: none;
@@ -1249,21 +1272,23 @@ input[type="checkbox"] {
 .campaign-activity li { margin: 8px 0; color: var(--muted); }
 .retry-acknowledgement { display: flex; align-items: flex-start; gap: 12px; margin: 20px 0; font-size: 13px; line-height: 1.6; }
 .retry-acknowledgement input { width: 16px; height: 16px; flex: 0 0 auto; margin: 3px 0; }
-.campaign-products { margin-top: 32px; }
-.campaign-products-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
-.campaign-products-heading > .button { flex-shrink: 0; }
-.campaign-product-group { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 16px; }
-.campaign-product-group h3 { font-size: 14px; margin: 8px 0; }
-.campaign-member { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; }
-.campaign-member strong { font-size: 12px; font-weight: 500; }
-.campaign-member p { margin: 5px 0 0; }
-.campaign-member > .button, .campaign-member > .badge { flex-shrink: 0; }
-.campaign-selection { border-top: 1px solid var(--border); margin-top: 24px; padding-top: 20px; }
-.campaign-selection > label { display: block; margin-bottom: 10px; }
-.campaign-selection-group { border: 1px solid var(--border); border-radius: 8px; margin-top: 12px; padding: 12px 16px; }
-.campaign-selection-group summary { font-size: 13px; }
-.campaign-member-option { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; padding: 12px 0; }
-.campaign-member-option input { width: 16px; height: 16px; margin: 0; flex: 0 0 auto; }
+.campaign-products { border-top: 1px solid var(--border); margin-top: 56px; padding-top: 36px; }
+.campaign-products-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 28px; margin-bottom: 20px; }
+.campaign-products-heading h2 { font-size: 22px; margin: 0 0 8px; }
+.campaign-products-heading .eyebrow { margin-bottom: 8px; }
+.campaign-products-heading > div > p:last-child { max-width: 620px; }
+.campaign-product-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
+.campaign-product-card { min-width: 0; overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+.campaign-product-image { display: grid; place-items: center; aspect-ratio: 4/3; overflow: hidden; background: #f1f2ed; color: #899083; font-size: 26px; }
+.campaign-product-image img { width: 100%; height: 100%; object-fit: contain; }
+.campaign-product-content { padding: 16px; }
+.campaign-product-content h3 { margin: 10px 0 6px; font-size: 15px; }
+.campaign-product-content p { margin: 0; }
+.campaign-product-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 20px; color: var(--muted); font-size: 11px; }
+.campaign-product-meta strong { color: var(--text); font-size: 13px; }
+.campaign-product-option { margin-top: 10px !important; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.campaign-product-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; }
+.campaign-product-footer .button { min-height: 32px; padding: 6px 9px; }
 .ad-refinement label { display: block; margin: 16px 0 10px; }
 .ad-review-evidence { border-top: 1px solid var(--border); margin-top: 20px; padding-top: 16px; font-size: 12px; }
 .ad-review-evidence > img { display: block; margin-top: 16px; }
@@ -1272,8 +1297,9 @@ input[type="checkbox"] {
   .campaign-launch { flex-direction: column; align-items: stretch; gap: 8px; }
   .campaign-choice { padding: 14px; }
   .campaign-direction { margin-top: 24px; }
-  .campaign-products-heading, .campaign-member { flex-direction: column; align-items: stretch; gap: 10px; }
-  .campaign-member > .badge { align-self: flex-start; }
+  .campaign-products { margin-top: 40px; padding-top: 28px; }
+  .campaign-products-heading { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .campaign-product-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 800px) {
   .setup-url-row { flex-direction: column; align-items: stretch; }

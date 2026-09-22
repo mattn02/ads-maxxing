@@ -37,5 +37,5 @@ export function shopifyVariants(product: Json) {
 }
 
 export function shopifyImages(product: Json): string[] {
-  return [...new Set([...list(product.images), product.featured_image].map(imageUrl).filter(Boolean))];
+  return [...new Set([product.featured_image, ...list(product.images)].map(imageUrl).filter(Boolean))];
 }

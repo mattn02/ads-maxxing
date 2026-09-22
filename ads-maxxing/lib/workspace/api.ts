@@ -8,6 +8,7 @@ export type WorkflowAction =
   | { action: "selectCampaignMember"; productId: string; variantId: string | null }
   | { action: "generateCampaignMember"; requestId: string; productId: string; variantId: string | null }
   | { action: "refineAd"; requestId: string; variantId: string; feedback: string }
+  | { action: "regenerateAd"; requestId: string; variantId: string }
   | { action: "retryCreative"; requestId: string; previousRequestId: string; briefId: string; acknowledgePossibleDuplicate?: boolean }
   | { action: "researchBrand"; operationId: string }
   | { action: "confirmOffer"; offerId: string; productId: string }
@@ -47,9 +48,9 @@ export const workspaceApi = {
 export const statusLabels: Record<Variant["status"], string> = {
   pending_review: "Checking",
   review_failed: "Review unavailable",
-  needs_changes: "Changes needed",
-  needs_human: "Needs your review",
-  reviewed: "Ready for approval",
+  needs_changes: "Feedback ready",
+  needs_human: "Feedback ready",
+  reviewed: "Ready for your decision",
   approved: "Approved",
 };
 export function storeName(session: Session | null) {
@@ -62,9 +63,10 @@ export function storeName(session: Session | null) {
   }
 }
 export function groupVariants(variants: Variant[]) {
-  const byId = new Map(variants.map((v) => [v.id, v]));
+  const published = variants.filter(isPublishedVariant);
+  const byId = new Map(published.map((v) => [v.id, v]));
   const groups = new Map<string, Variant[]>();
-  for (const variant of variants) {
+  for (const variant of published) {
     let root = variant;
     const seen = new Set([root.id]);
     while (
@@ -78,4 +80,9 @@ export function groupVariants(variants: Variant[]) {
     groups.set(root.id, [...(groups.get(root.id) || []), variant]);
   }
   return [...groups.values()];
+}
+
+/** Every completed generation is user-visible; review findings are advisory. */
+export function isPublishedVariant(variant: Variant) {
+  return Boolean(variant.imageUrl);
 }

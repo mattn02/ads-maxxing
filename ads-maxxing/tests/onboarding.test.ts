@@ -46,9 +46,6 @@ const dependencies = () => {
     discover: async () => {
       throw new Error("Must not discover during setup");
     },
-    classify: async () => {
-      throw new Error("Must not classify during setup");
-    },
     now: Date.now,
   };
 };

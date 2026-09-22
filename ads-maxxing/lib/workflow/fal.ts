@@ -1,16 +1,16 @@
 import { requireKey, WorkflowError } from "./validation";
-import { MODEL, BACKGROUND_MODEL, IMAGE_SETTINGS, SCENE_SETTINGS } from "./fal-model";
+import { MODEL, SCENE_SETTINGS } from "./fal-model";
 import type { ProviderResult } from "./creative/schema";
-export { MODEL, BACKGROUND_MODEL } from "./fal-model";
+export { MODEL } from "./fal-model";
 export class ImageRequestError extends WorkflowError {
   constructor(message: string, public readonly outcome: "rejected" | "unknown", status = 502) { super(message, status); }
 }
 export function assertImageConfiguration() { requireKey("FAL_AI_API_KEY"); }
-async function request(model: string, prompt: string, images?: string[]): Promise<ProviderResult> {
+async function request(model: string, sourceImage: string, prompt: string): Promise<ProviderResult> {
   const key = requireKey("FAL_AI_API_KEY");
   const response = await fetch(`https://fal.run/${model}`, {
     method: "POST", headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ ...(images ? SCENE_SETTINGS : IMAGE_SETTINGS), prompt, ...(images ? { image_urls: images } : {}) }),
+    body: JSON.stringify({ ...SCENE_SETTINGS, prompt, image_urls: [sourceImage] }),
     signal: AbortSignal.timeout(150000),
   });
   if (!response.ok) {
@@ -25,9 +25,8 @@ async function request(model: string, prompt: string, images?: string[]): Promis
   if (typeof imageUrl !== "string") throw new WorkflowError("fal returned no image. Inspect the attempted stage before creating another revision.", 502);
   return { imageUrl, model, ...(typeof result.seed === "number" ? { seed: result.seed } : {}), ...(response.headers.get("x-fal-request-id") ? { requestId: response.headers.get("x-fal-request-id")! } : {}) };
 }
-export function generateBackground(prompt: string) { return request(BACKGROUND_MODEL, prompt); }
-/** Both references are mandatory, with immutable product identity always first. */
-export function generateScene(sourceImage: string, backgroundImage: string, prompt: string) {
-  if (!sourceImage || !backgroundImage) throw new WorkflowError("Scene generation needs the saved original and background.");
-  return request(MODEL, prompt, [sourceImage, backgroundImage]);
+/** The immutable Shopify product photo is the only visual reference. */
+export function generateScene(sourceImage: string, prompt: string) {
+  if (!sourceImage) throw new WorkflowError("Scene generation needs the saved original product photo.");
+  return request(MODEL, sourceImage, prompt);
 }

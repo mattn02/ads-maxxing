@@ -9,6 +9,11 @@ export const generationIntentSchema = z.object({
   researchId: z.string().optional(), briefId: z.string().optional(),
   previousRequestId: z.string().uuid().optional(),
   refinement: z.object({ variantId: z.string().min(1), feedback: z.string().trim().min(1).max(2000) }).optional(),
+  qualityGate: z.object({
+    attempt: z.union([z.literal(1), z.literal(2)]),
+    stage: z.enum(["generating", "reviewing", "refining", "passed", "failed", "review_failed"]),
+    variantId: z.string().min(1).optional(),
+  }).optional(),
   pausedReason: z.enum(["failure", "needs_input"]).optional(), error: z.string().optional(),
 });
 export const generateCampaignActionSchema = z.object({ action: z.literal("generateCampaign"), requestId: z.string().uuid(), source: generationSourceSchema });
@@ -19,6 +24,7 @@ export const setCampaignScopeActionSchema = z.object({ action: z.literal("setCam
 export const selectCampaignMemberActionSchema = z.object({ action: z.literal("selectCampaignMember"), ...member });
 export const generateCampaignMemberActionSchema = z.object({ action: z.literal("generateCampaignMember"), requestId: z.string().uuid(), ...member });
 export const refineAdActionSchema = z.object({ action: z.literal("refineAd"), requestId: z.string().uuid(), variantId: z.string().min(1), feedback: z.string().trim().min(1).max(2000) });
+export const regenerateAdActionSchema = z.object({ action: z.literal("regenerateAd"), requestId: z.string().uuid(), variantId: z.string().min(1) });
 export type GenerationSource = z.infer<typeof generationSourceSchema>;
 export type GenerationIntent = z.infer<typeof generationIntentSchema>;
 export type NextAction = { kind: "continue" | "retry" | "needs_input" | "complete"; requestId: string; message?: string; variantId?: string; briefId?: string; duplicateRisk?: boolean };

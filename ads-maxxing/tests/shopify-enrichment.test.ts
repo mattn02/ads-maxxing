@@ -7,7 +7,7 @@ import { matchingDeviceMembers, memberReferenceReadiness } from "../lib/workflow
 import type { Source } from "../lib/workflow/session-types";
 
 const source = (url = "https://apparel.example/products/linen-shirt"): Source => ({ url, title: "Linen shirt", description: "Lightweight linen", markdown: "Linen shirt", colors: {}, images: [], rawHtml: '<script src="https://cdn.shopify.com/theme.js"></script>', fetchedAt: "now" });
-const shirt = { id: 1, handle: "linen-shirt", title: "Linen shirt", options: ["Size", "Color"], images: ["/linen.jpg"], variants: [
+const shirt = { id: 1, handle: "linen-shirt", title: "Linen shirt", options: ["Size", "Color"], featured_image: "/featured.jpg", images: ["/linen.jpg"], variants: [
   { id: 11, title: "Small / Blue", options: ["Small", "Blue"], featured_image: { src: "/linen-blue.jpg" } },
   { id: 12, title: "Large / White", option1: "Large", option2: "White" },
 ] };
@@ -20,6 +20,7 @@ test("generic Shopify primary source preserves explicit size/color and endpoint 
   const found = extractSource(enriched), product = found.products[0];
   assert.deepEqual(product.variants[0].attributes, { Size: "Small", Color: "Blue" });
   assert.equal(product.variants[1].assetIds.length, 0);
+  assert.equal(found.assets[0].originalUrl, "https://apparel.example/featured.jpg");
   assert.equal(product.evidence.sourceUrl, enriched.shopify!.url);
   assert.equal(found.assets.find(asset => asset.variantIds.length)!.evidence.sourceUrl, enriched.shopify!.url);
   assert.deepEqual(matchingDeviceMembers(found.products, { generation: 18 }), []);

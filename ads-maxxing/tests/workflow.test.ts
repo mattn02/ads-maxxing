@@ -5,7 +5,6 @@ import { randomUUID } from "node:crypto";
 import { DEFAULT_DESIGN } from "../lib/workflow/creative/schema";
 import { Workflow, type WorkflowDependencies } from "../lib/workflow/service";
 import { assembleResearch } from "../lib/workflow/agents/researcher";
-import { backgroundPrompt } from "../lib/workflow/creative/background";
 import { artistPrompt } from "../lib/workflow/agents/artist";
 import { codeChecks, reviewVerdict } from "../lib/workflow/agents/reviewer";
 import type { Research, Session, Source, Variant } from "../lib/workflow/session-types";
@@ -15,7 +14,7 @@ import { conciergeText } from "../lib/workflow/concierge-stream";
 import { safeError } from "../lib/workflow/validation";
 import { structuredResult } from "../lib/workflow/structured-result";
 import type { UIMessage } from "ai";
-import { generateBackground, generateScene } from "../lib/workflow/fal";
+import { generateScene } from "../lib/workflow/fal";
 import { scrapePage } from "../lib/workflow/firecrawl";
 
 const source: Source = { url: "https://store.example/products/case", title: "Real case", description: "A red case", images: ["https://store.example/case.png"], markdown: "Members get 10% off red cases through Friday.", colors: { primary: "#ff0000" }, fetchedAt: new Date().toISOString() };
@@ -29,7 +28,7 @@ function fixture(overrides: Partial<WorkflowDependencies> = {}) {
   const dependencies: WorkflowDependencies = {
     research: async () => makeResearch(), save: async () => {}, readVisual: async () => null,
     pinSourceAsset: async () => "source-fixture", readAsset: async () => Buffer.from("source"),
-    createAd: async (current, _research, execution) => { await execution!.beforeAttempt("background"); generations++; return { id: randomUUID(), imageUrl: "/api/outputs/test", model: "test", prompt: `${backgroundPrompt(current)}\n${artistPrompt(current)}`, referenceImage: current.referenceImage, createdAt: "now" }; },
+    createAd: async (current, _research, execution) => { await execution!.beforeAttempt("scene"); generations++; return { id: randomUUID(), imageUrl: "/api/outputs/test", model: "test", prompt: artistPrompt(current), referenceImage: current.referenceImage, createdAt: "now" }; },
     reviewAd: async () => ({ verdict: "pass", visual, checks: [], createdAt: "now" }), ...overrides,
   };
   const workflow = new Workflow(session, dependencies);
@@ -138,15 +137,16 @@ test("review failure retains image; retrying review never regenerates", async ()
   assert.equal(session.variants.length, 1);
   assert.doesNotMatch(output.reviewError!, /secret/);
   await workflow.review(output.id);
-  assert.equal(output.status, "needs_changes");
+  assert.equal(output.status, "reviewed");
   assert.equal(generationCount(), 1);
-  await assert.rejects(workflow.approveVariant(output.id), /Resolve/);
+  await workflow.approveVariant(output.id);
+  assert.equal(output.status, "approved");
 });
 
 test("failed generation is marked before calling fal and cannot automatically retry", async () => {
   let calls = 0;
   const { workflow, session } = fixture({ createAd: async (_brief, _research, execution) => {
-    await execution!.beforeAttempt("background");
+    await execution!.beforeAttempt("scene");
     assert.ok(session.brief?.generationAttemptedAt);
     calls++;
     throw new Error("timeout");
@@ -193,7 +193,7 @@ test("review combines code and visual results; uncertainty never passes", async 
 // Real transactional ownership, leases, immutable snapshots, and reloads are exercised
 // by scripts/verify-persistence-sql.mjs and tests/persistence.test.ts.
 
-test("provider adapters forward pinned source and background, use portrait geometry and request branding", async t => {
+test("provider adapters forward one pinned source, use portrait geometry and request branding", async t => {
   process.env.FAL_AI_API_KEY = "fixture";
   process.env.FIRECRAWL_API_KEY = "fixture";
   t.mock.method(globalThis, "fetch", async (url: string | URL, init?: RequestInit) => {
@@ -203,17 +203,14 @@ test("provider adapters forward pinned source and background, use portrait geome
       return Response.json({ success: true, data: { markdown: source.markdown, images: ["/case.png"], branding: { colors: source.colors }, metadata: { statusCode: 200, title: source.title } } });
     }
     const body = JSON.parse(init!.body as string);
-    if (body.image_urls) {
-      assert.deepEqual(body.image_urls, [source.images[0], "https://saved.example/background.png"]);
-      assert.equal(body.aspect_ratio, "9:16");
-    } else assert.deepEqual(body.image_size, { width: 576, height: 1024 });
+    assert.deepEqual(body.image_urls, [source.images[0]]);
+    assert.equal(body.aspect_ratio, "9:16");
     assert.equal(body.num_images, 1);
     return Response.json({ images: [{ url: "https://fal.media/fixture.png" }] });
   });
   try {
     assert.deepEqual((await scrapePage(source.url, true)).images, source.images);
-    await generateBackground("Fixture background");
-    const generated = await generateScene(source.images[0], "https://saved.example/background.png", "Fixture ad");
+    const generated = await generateScene(source.images[0], "Fixture ad");
     assert.equal(generated.imageUrl, "https://fal.media/fixture.png");
   } finally { t.mock.restoreAll(); delete process.env.FAL_AI_API_KEY; delete process.env.FIRECRAWL_API_KEY; }
 });
@@ -368,10 +365,10 @@ test("concierge tool payloads omit provider recovery URLs and failed research ne
   const { workflow, session } = fixture();
   const saved = await draft(workflow); await workflow.approveBrief(saved.id);
   const secret = "https://fal.media/private-provider-recovery";
-  workflow.generate = async () => ({ id: "generated", imageUrl: "/api/outputs/generated", createdAt: "now", referenceImage: source.images[0], model: "fixture", prompt: "fixture", status: "reviewed", research: session.research!, brief: { ...session.brief!, backgroundCheckpoint: { state: "output_pending_storage", provider: { imageUrl: secret, model: "fixture" } } } });
+  workflow.generate = async () => ({ id: "generated", imageUrl: "/api/outputs/generated", createdAt: "now", referenceImage: source.images[0], model: "fixture", prompt: "fixture", status: "reviewed", research: session.research!, brief: { ...session.brief!, sceneCheckpoint: { state: "output_pending_storage", provider: { imageUrl: secret, model: "fixture" } } } });
   const agent = createConcierge(workflow, new MockLanguageModelV4());
   const output = await agent.tools.generateAd.execute!({}, { toolCallId: "generate", messages: [], context: undefined });
-  assert.doesNotMatch(JSON.stringify(output), /private-provider-recovery|backgroundCheckpoint|research/);
+  assert.doesNotMatch(JSON.stringify(output), /private-provider-recovery|sceneCheckpoint|research/);
   assert.match(JSON.stringify(output), /api\/outputs\/generated/);
   const failed = fixture({ research: async (_input, options) => {
     const partial = makeResearch(); partial.campaign!.status = "awaiting_direction";
@@ -386,21 +383,16 @@ test("concierge tool payloads omit provider recovery URLs and failed research ne
 });
 
 
-test("a slow background pauses before paid scene dispatch and resumes on a fresh request", async () => {
+test("a low request budget pauses before paid scene dispatch and resumes on a fresh request", async () => {
   let now = 0;
-  let backgrounds = 0;
   let scenes = 0;
+  let delayed = false;
   const { workflow, session, dependencies } = fixture({
     now: () => now,
     createAd: async (current, _research, execution) => {
-      if (!execution.background) {
-        await execution.beforeAttempt("background");
-        backgrounds++;
+      if (!delayed) {
+        delayed = true;
         now += 125_000;
-        await execution.checkpoint("background", {
-          id: current.executionPlan!.background.assetId, kind: "generated_background", model: "fixture", prompt: "background",
-          inputs: { fingerprint: current.executionPlan!.background.fingerprint }, createdAt: "now",
-        });
       }
       await execution.beforeAttempt("scene");
       scenes++;
@@ -410,16 +402,13 @@ test("a slow background pauses before paid scene dispatch and resumes on a fresh
   const approved = await draft(workflow);
   await workflow.approveBrief(approved.id);
   await assert.rejects(workflow.generate(), /fresh request/);
-  assert.equal(backgrounds, 1);
   assert.equal(scenes, 0);
-  assert.equal(session.brief!.backgroundCheckpoint?.state, "saved");
   assert.equal(session.brief!.sceneCheckpoint, undefined);
   assert.equal(session.brief!.approvedAt, approved.approvedAt);
-  // Reloading the saved state starts a new request budget and reuses its background.
+  // Reloading the saved state starts a new request budget.
   const resumed = new Workflow(structuredClone(session), dependencies);
   const output = await resumed.generate(approved.id);
   assert.equal(output.status, "reviewed");
-  assert.equal(backgrounds, 1);
   assert.equal(scenes, 1);
 });
 

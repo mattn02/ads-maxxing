@@ -8,6 +8,7 @@ import type { Session, Variant } from "@/lib/workflow/session-types";
 import type { GenerationSource } from "@/lib/workflow/generation-contracts";
 import {
   workspaceApi,
+  isPublishedVariant,
   storeName,
   type CampaignSummary,
   type WorkflowAction,
@@ -15,7 +16,7 @@ import {
 import { Button } from "@/components/workspace/ui";
 import { AssetsView, ResearchView } from "@/components/workspace/research";
 import { AdsView, BriefEditor } from "@/components/workspace/ads";
-import { ChatPanel } from "@/components/workspace/chat";
+import { ChatPanel, type ChatAttachment } from "@/components/workspace/chat";
 import { CampaignDirection } from "./campaign-direction";
 import { CampaignProgress } from "./campaign-progress";
 import { CampaignProducts } from "./campaign-products";
@@ -48,12 +49,9 @@ export function CampaignWorkspace({
   const [view, setView] = useState<"overview" | "brief" | "research">(
     "overview",
   );
-  const [selected, setSelected] = useState<string | null>(initial.variants.at(-1)?.id ?? null);
+  const [selected, setSelected] = useState<string | null>(initial.variants.filter(isPublishedVariant).at(-1)?.id ?? null);
   const [input, setInput] = useState("");
-  const [attachment, setAttachment] = useState<{
-    id: string;
-    headline: string;
-  } | null>(null);
+  const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState("");
   const [refreshError, setRefreshError] = useState("");
@@ -65,7 +63,7 @@ export function CampaignWorkspace({
   const submittedGeneration = useRef<string | null>(null);
   const [pendingGeneration, setPendingGeneration] = useState(initialGeneration);
   const continued = useRef<string | null>(null);
-  const seenVariants = useRef(new Set(initial.variants.map((variant) => variant.id)));
+  const seenVariants = useRef(new Set(initial.variants.filter(isPublishedVariant).map((variant) => variant.id)));
   const receive = useCallback((next: Session) => {
     // A poll issued during a mutation can arrive after its completed response.
     if (next.events.length < sessionRef.current.events.length) return;
@@ -73,9 +71,10 @@ export function CampaignWorkspace({
     sessionRef.current = next;
     setSession(next);
     if (resolvedInput) setView("overview");
-    const newest = next.variants.at(-1);
+    const published = next.variants.filter(isPublishedVariant);
+    const newest = published.at(-1);
     if (newest && !seenVariants.current.has(newest.id)) {
-      next.variants.forEach((variant) => seenVariants.current.add(variant.id));
+      published.forEach((variant) => seenVariants.current.add(variant.id));
       setSelected(newest.id);
       setSection("Ads");
       setView("overview");
@@ -166,7 +165,7 @@ export function CampaignWorkspace({
   }, [initialGeneration, busy, actionError, action]);
   const next = session.nextAction;
   const continuationKey = next?.kind === "continue"
-    ? `${next.requestId}:${session.events.length}:${session.brief?.id}:${session.brief?.backgroundCheckpoint?.state}:${session.brief?.sceneCheckpoint?.state}`
+    ? `${next.requestId}:${session.events.length}:${session.brief?.id}:${session.brief?.sceneCheckpoint?.state}`
     : null;
   useEffect(() => {
     if (!continuationKey || next?.kind !== "continue" || busy || actionError || refreshError) return;
@@ -195,16 +194,31 @@ export function CampaignWorkspace({
   }
   function send(text: string) {
     if (busy) return;
-    const prompt = attachment
+    const prompt = attachment?.kind === "variant"
       ? `Feedback on variant ${attachment.id} (${attachment.headline}): ${text}. Prepare a new brief linked to this parent variant; preserve the original ad.`
-      : text;
+      : attachment?.kind === "product"
+        ? `Plan an ad for the already-selected campaign product ${attachment.productId}${attachment.variantId ? ` and exact option ${attachment.variantId}` : ""} (${attachment.label}). My specific direction: ${text}. Use its verified saved product photo, prepare a brief, and wait for my explicit approval before generating.`
+        : text;
     setInput("");
     setAttachment(null);
     setActionError("");
     void sendMessage({ text: prompt });
   }
   function feedback(variant: Variant) {
-    setAttachment({ id: variant.id, headline: variant.brief.headline });
+    setAttachment({ kind: "variant", id: variant.id, headline: variant.brief.headline });
+    setChatOpen(true);
+    setMobileChat(true);
+  }
+  async function planProduct(member: import("@/lib/workflow/research/scope").CampaignMember, productTitle: string, optionTitle?: string) {
+    const selected = await action({ action: "selectCampaignMember", ...member });
+    if (!selected) return;
+    setAttachment({
+      kind: "product",
+      productId: member.productId,
+      variantId: member.variantId,
+      label: optionTitle ? `${productTitle} · ${optionTitle}` : productTitle,
+    });
+    setInput("");
     setChatOpen(true);
     setMobileChat(true);
   }
@@ -214,6 +228,7 @@ export function CampaignWorkspace({
     setMobileChat(false);
   }
   const name = storeName(session);
+  const publishedVariants = session.variants.filter(isPublishedVariant);
   const showBrief = session.brief && view === "brief";
   const generating = !!session.researchState?.generationIntent && next?.kind !== "complete";
   const starting = !!pendingGeneration && !session.researchState?.generationIntent && !session.variants.length;
@@ -255,8 +270,8 @@ export function CampaignWorkspace({
             >
               <span aria-hidden="true">{["▦", "▧", "◈"][i]}</span>
               {s}
-              {s === "Ads" && !!session?.variants.length && (
-                <small>{session.variants.length}</small>
+              {s === "Ads" && !!publishedVariants.length && (
+                <small>{publishedVariants.length}</small>
               )}
             </button>
           ))}
@@ -396,7 +411,7 @@ export function CampaignWorkspace({
                   void action({ action: "generateCampaign", ...pendingGeneration });
                 } : undefined}
               />}
-              {!session.variants.length && !generating && !starting && session.research && <CampaignDirection research={session.research} busy={busy} generate={generate} />}
+              {!publishedVariants.length && !generating && !starting && session.research && <CampaignDirection research={session.research} busy={busy} generate={generate} />}
               {!!session.variants.length && <AdsView
                 session={session}
                 selected={selected}
@@ -410,8 +425,7 @@ export function CampaignWorkspace({
                 key={session.research.id}
                 research={session.research}
                 busy={busy}
-                save={(members) => action({ action: "setCampaignScope", members })}
-                generate={(member) => void action({ action: "generateCampaignMember", requestId: crypto.randomUUID(), ...member })}
+                plan={(member, productTitle, optionTitle) => void planProduct(member, productTitle, optionTitle)}
               />}
             </>
           )}

@@ -36,7 +36,7 @@ export function memberReferenceReadiness(member: CampaignMember, products: Resea
   const variant = member.variantId ? product?.variants.find(variant => variant.id === member.variantId) : null;
   const referenceAssetIds = product && (!member.variantId || variant) ? assets.filter(asset =>
     product.assetIds.includes(asset.id) && asset.productIds.includes(product.id) && asset.eligibleAsProductReference &&
-    ["verified_structure", "user_confirmed"].includes(asset.classification) && ["product_photo", "product_lifestyle"].includes(asset.role) &&
+    asset.classification === "verified_structure" && ["product_photo", "product_lifestyle"].includes(asset.role) &&
     (!member.variantId || !!variant?.assetIds.includes(asset.id) && asset.variantIds.includes(member.variantId)),
   ).map(asset => asset.id) : [];
   return { status: referenceAssetIds.length ? "ready" as const : "needs_reference" as const, referenceAssetIds,

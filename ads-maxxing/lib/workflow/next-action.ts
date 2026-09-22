@@ -12,12 +12,12 @@ export function campaignNextAction(session: Session): NextAction | undefined {
   const variant = session.variants.find(item => item.id === intent.briefId);
   if (variant) {
     if (variant.status === "pending_review") return { ...base, kind: intent.pausedReason === "failure" ? "retry" : "continue", message: "Your ad is saved. Finish its review." };
-    return { ...base, kind: "complete", variantId: variant.id, message: variant.status === "review_failed" ? "Your ad is saved. Its automated review was unavailable." : "Your ad is ready to review." };
+    return { ...base, kind: "complete", variantId: variant.id, message: variant.status === "review_failed" ? "Your ad is ready. Automated feedback was unavailable, so review it directly." : "Your ad and automated feedback are ready for your decision." };
   }
   const brief = session.brief?.id === intent.briefId ? session.brief : undefined;
-  const uncertain = [brief?.backgroundCheckpoint, brief?.sceneCheckpoint].find(item => item?.state === "attempted" && !item.provider);
-  if (uncertain) return { ...base, kind: "retry", briefId: brief!.id, duplicateRisk: uncertain.failure?.outcome !== "rejected", message: uncertain.failure?.outcome === "rejected" ? "The image provider rejected this attempt. Retry starts a new paid attempt and keeps saved stages." : "The previous image request may have completed, but no result was saved. Starting another attempt may charge twice." };
+  const uncertain = brief?.sceneCheckpoint?.state === "attempted" && !brief.sceneCheckpoint.provider ? brief.sceneCheckpoint : undefined;
+  if (uncertain) return { ...base, kind: "retry", briefId: brief!.id, duplicateRisk: uncertain.failure?.outcome !== "rejected", message: uncertain.failure?.outcome === "rejected" ? "The image provider rejected this attempt. Retry starts a new paid scene attempt." : "The previous image request may have completed, but no result was saved. Starting another attempt may charge twice." };
   if (intent.pausedReason === "failure") return { ...base, kind: "retry", message: intent.error || "Saved work is retained. Try this step again." };
-  if (intent.researchId && (session.researchState?.stage === "needs_selection" || intent.pausedReason === "needs_input")) return { ...base, kind: "needs_input", message: intent.error || "Choose a product or confirm its photo to continue." };
+  if (intent.researchId && (session.researchState?.stage === "needs_selection" || intent.pausedReason === "needs_input")) return { ...base, kind: "needs_input", message: intent.error || "Choose a product with a Shopify-associated photo to continue." };
   return { ...base, kind: "continue", message: brief ? "Finishing your saved creative." : intent.researchId ? "Preparing your creative." : "Researching your campaign." };
 }

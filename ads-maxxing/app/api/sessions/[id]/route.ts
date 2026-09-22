@@ -8,12 +8,12 @@ import { briefSchema } from "@/lib/workflow/schema";
 import { Workflow } from "@/lib/workflow/service";
 import { loadSession, lockSession } from "@/lib/workflow/sessions";
 import { apiError, WorkflowError } from "@/lib/workflow/validation";
-import { generateCampaignActionSchema, continueCampaignActionSchema, retryCreativeActionSchema, setCampaignScopeActionSchema, selectCampaignMemberActionSchema, generateCampaignMemberActionSchema, refineAdActionSchema } from "@/lib/workflow/generation-contracts";
+import { generateCampaignActionSchema, continueCampaignActionSchema, retryCreativeActionSchema, regenerateAdActionSchema, setCampaignScopeActionSchema, selectCampaignMemberActionSchema, generateCampaignMemberActionSchema, refineAdActionSchema } from "@/lib/workflow/generation-contracts";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 type Context = { params: Promise<{ id: string }> };
 const actionSchema = z.discriminatedUnion("action", [
-  generateCampaignActionSchema, continueCampaignActionSchema, retryCreativeActionSchema,
+  generateCampaignActionSchema, continueCampaignActionSchema, retryCreativeActionSchema, regenerateAdActionSchema,
   setCampaignScopeActionSchema, selectCampaignMemberActionSchema, generateCampaignMemberActionSchema, refineAdActionSchema,
   z.object({ action: z.literal("researchBrand"), operationId: z.string().uuid() }),
   z.object({ action: z.literal("confirmOffer"), offerId: z.string(), productId: z.string() }),
@@ -52,6 +52,7 @@ export async function POST(request: Request, { params }: Context) {
       case "selectCampaignMember": await workflow.selectCampaignMember(action.productId, action.variantId); break;
       case "generateCampaignMember": await workflow.generateCampaignMember(action.requestId, action.productId, action.variantId); break;
       case "refineAd": await workflow.refineAd(action.requestId, action.variantId, action.feedback); break;
+      case "regenerateAd": await workflow.regenerateAd(action.requestId, action.variantId); break;
       case "retryCreative": await workflow.retryCreative(action.requestId, action.previousRequestId, action.briefId, action.acknowledgePossibleDuplicate); break;
       case "confirmOffer": await workflow.confirmOffer(action.offerId, action.productId); break;
       case "selectProduct": await workflow.selectProduct(action.productId); break;

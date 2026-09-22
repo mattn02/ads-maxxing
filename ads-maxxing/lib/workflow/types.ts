@@ -20,5 +20,5 @@ export type Generation = {
   design?: DesignSpec;
   tokens?: BrandTokens;
   rendererVersion?: number;
-  renderedCopy?: { headline: string; cta: string; offer: string | null };
+  renderedCopy?: { headline: string; cta: string; price: string | null; offer: string | null };
 };

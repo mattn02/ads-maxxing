@@ -8,14 +8,14 @@ import { Workflow } from "../lib/workflow/service";
 import { research } from "../lib/workflow/agents/researcher";
 import { createAd } from "../lib/workflow/agents/artist";
 import { reviewAd } from "../lib/workflow/agents/reviewer";
-import { generateBackground, generateScene } from "../lib/workflow/fal";
+import { generateScene } from "../lib/workflow/fal";
 import { assetProviderUrl, pinSourceAsset, readAsset, readImage, readVisual, saveComposedGeneration, saveStageAsset } from "../lib/workflow/storage";
 import { DEFAULT_DESIGN } from "../lib/workflow/creative/schema";
 import { renderCreative } from "../lib/workflow/creative/render";
 import { imageMetadata } from "../lib/workflow/asset-download";
 import { safeError } from "../lib/workflow/validation";
 
-type Run = { sourceCampaignId: string; campaignId: string; briefId: string; previousBriefIds?: string[]; sourceAssetId: string; sourceUrl: string; attempts: { stage: "background" | "scene"; at: string }[] };
+type Run = { sourceCampaignId: string; campaignId: string; briefId: string; previousBriefIds?: string[]; sourceAssetId: string; sourceUrl: string; attempts: { stage: "scene"; at: string }[] };
 
 async function main() {
   const configuredOrigin = new URL(configuration().url).origin;
@@ -33,7 +33,7 @@ async function main() {
     return response;
   };
   const [mode, runDirectory, argument] = process.argv.slice(2);
-  if (!runDirectory || !["prepare", "generate", "recompose", "review", "verify"].includes(mode)) throw new Error("Usage: node --env-file=.env.local --import tsx scripts/verify-real-ad.ts prepare <new-run-directory> <source-campaign-id> | generate <run-directory> --allow-two-paid-calls | recompose <run-directory> | review <run-directory> | verify <run-directory>");
+  if (!runDirectory || !["prepare", "generate", "recompose", "review", "verify"].includes(mode)) throw new Error("Usage: node --env-file=.env.local --import tsx scripts/verify-real-ad.ts prepare <new-run-directory> <source-campaign-id> | generate <run-directory> --allow-one-paid-call | recompose <run-directory> | review <run-directory> | verify <run-directory>");
   const directory = path.resolve(runDirectory);
   const runFile = path.join(directory, "run.json");
   let run: Run;
@@ -73,27 +73,26 @@ async function main() {
         const bytes = await readAsset(run.sourceAssetId);
         assert.ok(bytes);
         await writeFile(path.join(directory, `original.${imageMetadata(bytes).extension}`), bytes);
-        console.log(JSON.stringify({ prepared: true, campaignId: session.id, briefId: brief.id, sourceAssetId: brief.sourceAssetId, publicSourceUrl: reference.originalUrl, paidCalls: 0, next: "Visually inspect original, then explicitly run generate --allow-two-paid-calls" }));
+        console.log(JSON.stringify({ prepared: true, campaignId: session.id, briefId: brief.id, sourceAssetId: brief.sourceAssetId, publicSourceUrl: reference.originalUrl, paidCalls: 0, next: "Visually inspect original, then explicitly run generate --allow-one-paid-call" }));
       } finally { await release(); }
       return;
     }
     if (["generate", "recompose", "review"].includes(mode)) {
-      if (mode === "generate") assert.equal(argument, "--allow-two-paid-calls", "Paid generation requires the explicit bounded flag");
+      if (mode === "generate") assert.equal(argument, "--allow-one-paid-call", "Paid generation requires the explicit bounded flag");
       const release = await lockSession(run!.campaignId);
       try {
         const session = await loadSession(run!.campaignId);
         assert.equal(session.brief?.id, run!.briefId, "Verification must use the same immutable brief");
-        const recordAttempt = async (stage: "background" | "scene") => {
+        const recordAttempt = async (stage: "scene") => {
           assert.equal(mode, "generate", "Recomposition and review must never submit a model image request");
-          assert.ok(run!.attempts.length < 2 && !run!.attempts.some(item => item.stage === stage), "The live check permits one background and one scene, never repeats");
+          assert.ok(run!.attempts.length < 1 && !run!.attempts.some(item => item.stage === stage), "The live check permits one complete scene and never repeats it");
           run!.attempts.push({ stage, at: new Date().toISOString() });
           await writeFile(runFile, JSON.stringify(run, null, 2));
           console.log(JSON.stringify({ submittedStage: stage, totalPaidAttempts: run!.attempts.length }));
         };
         const workflow = new Workflow(session, { loadBrandResearch, research, reviewAd, save: saveSession, readVisual, readAsset, pinSourceAsset,
           createAd: (brief, saved, execution) => createAd(brief, saved, execution, {
-            generateBackground: async prompt => { await recordAttempt("background"); return generateBackground(prompt); },
-            generateScene: async (source, background, prompt) => { await recordAttempt("scene"); return generateScene(source, background, prompt); },
+            generateScene: async (source, prompt) => { await recordAttempt("scene"); return generateScene(source, prompt); },
             saveStageAsset, readAsset, assetProviderUrl, render: renderCreative, saveFinal: saveComposedGeneration,
           }),
         });
@@ -101,7 +100,6 @@ async function main() {
           const previous = session.variants.find(item => item.id === run!.briefId);
           assert.ok(previous, "Recomposition requires a completed saved parent");
           const next = await workflow.proposeBrief({ ...previous.brief, parentVariantId: previous.id, variation: "auto", feedback: "Preserve the complete saved product scene outside the copy panel." });
-          assert.equal(next.executionPlan?.background.action, "reuse");
           assert.equal(next.executionPlan?.scene.action, "reuse");
           run!.previousBriefIds = [...(run!.previousBriefIds || []), run!.briefId];
           run!.briefId = next.id;
@@ -115,7 +113,7 @@ async function main() {
     const loaded = await loadSession(run!.campaignId);
     const variant = loaded.variants.find(item => item.id === run!.briefId);
     if (!variant) {
-      console.log(JSON.stringify({ complete: false, campaignId: loaded.id, background: loaded.brief?.backgroundCheckpoint?.state, scene: loaded.brief?.sceneCheckpoint?.state, totalPaidAttempts: run!.attempts.length }));
+      console.log(JSON.stringify({ complete: false, campaignId: loaded.id, scene: loaded.brief?.sceneCheckpoint?.state, totalPaidAttempts: run!.attempts.length }));
       return;
     }
     assert.equal(variant.sourceAssetId, run!.sourceAssetId);

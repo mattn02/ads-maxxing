@@ -8,16 +8,16 @@ const id = "00000000-0000-4000-8000-000000000001";
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCfkAAAAASUVORK5CYII=", "base64");
 const variant = (rendererVersion: number) => ({ id, rendererVersion, brief: { id, researchId: id }, research: { id, sales: [], sources: [] } }) as unknown as Variant;
 
-test("review accepts renderer 2 and 3 and unknown versions cannot pass", () => {
+test("review accepts supported renderer versions and unknown versions cannot pass", () => {
   const pass = { status: "pass" as const, reason: "Visible" };
-  for (const version of [1, 2, 3, 4, 999]) {
+  for (const version of [1, 2, 3, 4, 5, 999]) {
     const check = codeChecks(variant(version), png).find(check => check.name === "renderer_version")!;
-    assert.equal(check.passed, version === 2 || version === 3);
+    assert.equal(check.passed, [2, 3, 4, 5].includes(version));
     assert.equal(reviewVerdict([check], { productFidelity: pass, textLegibility: pass, claimAccuracy: pass, brandFit: pass, summary: "Visible" }), check.passed ? "pass" : "needs_changes");
   }
 });
 
-test("both supported renderers refuse fidelity review without the saved original before calling a model", async t => {
+test("supported renderers refuse fidelity review without the saved original before calling a model", async t => {
   const keys = ["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SECRET_KEY"] as const;
   const previous = keys.map(key => process.env[key]);
   process.env.SUPABASE_URL = "https://storage.example";
@@ -33,10 +33,10 @@ test("both supported renderers refuse fidelity review without the saved original
     assert.fail("Review must not contact the model or a remote product photo without the saved original");
   });
   try {
-    for (const version of [2, 3]) await persistenceContext.run({ userId: id }, async () => {
+    for (const version of [2, 3, 4, 5]) await persistenceContext.run({ userId: id }, async () => {
       await assert.rejects(reviewAd(variant(version)), /Saved original is missing; fidelity review cannot run/);
     });
-    assert.equal(reads, 6);
+    assert.equal(reads, 12);
   } finally {
     keys.forEach((key, index) => { if (previous[index] === undefined) delete process.env[key]; else process.env[key] = previous[index]; });
   }

@@ -1,15 +1,33 @@
-import { generateText, type LanguageModel, type ModelMessage } from "ai";
+import { generateText, NoObjectGeneratedError, Output, type LanguageModel, type ModelMessage } from "ai";
 import { z } from "zod";
 import { WorkflowError } from "./validation";
 
-/** Findings are data, not actions. Validate JSON locally without requiring provider tool/schema support. */
-export async function structuredResult<T>({ model, schema, instructions, messages, maxOutputTokens = 2200 }: {
+/** Findings are data, not actions. Prefer provider JSON where supported; retain prompted JSON for fallback models. */
+export async function structuredResult<T>({ model, schema, instructions, messages, maxOutputTokens = 2200, providerStructuredOutput = false }: {
   model: LanguageModel;
   schema: z.ZodType<T>;
   instructions: string;
   messages: ModelMessage[];
   maxOutputTokens?: number;
+  providerStructuredOutput?: boolean;
 }): Promise<T> {
+  if (providerStructuredOutput) {
+    try {
+      const result = await generateText({
+        model, messages, instructions,
+        output: Output.object({ schema, name: "structured_findings" }),
+        maxRetries: 0, timeout: 60000, maxOutputTokens,
+      });
+      return result.output;
+    } catch (error) {
+      if (!NoObjectGeneratedError.isInstance(error)) throw error;
+      console.warn(JSON.stringify({ event: "structured-findings-invalid", finishReason: error.finishReason,
+        outputTokens: error.usage?.outputTokens, reasoningTokens: error.usage?.outputTokenDetails.reasoningTokens,
+        textCharacters: error.text?.length || 0, mode: "provider" }));
+      if (error.finishReason === "length") throw new WorkflowError("The model’s findings were cut off at the output limit. Try again; no automatic retry was made.", 502);
+      throw new WorkflowError("The model returned invalid structured findings. Try again; no automatic retry was made.", 502);
+    }
+  }
   const result = await generateText({
     model, messages,
     instructions: `${instructions}\nReturn only one JSON object matching this JSON schema. Do not call tools, add prose, or wrap the JSON in Markdown.\n${JSON.stringify(z.toJSONSchema(schema))}`,

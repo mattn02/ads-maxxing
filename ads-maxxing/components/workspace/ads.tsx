@@ -9,6 +9,7 @@ import { resolveBrandTokens } from "@/lib/workflow/creative/tokens";
 import type { Brief, Session, Variant } from "@/lib/workflow/session-types";
 import {
   groupVariants,
+  isPublishedVariant,
   statusLabels,
   type WorkflowAction,
 } from "@/lib/workspace/api";
@@ -28,7 +29,7 @@ export function CampaignForm({
   const [direction, setDirection] = useState("");
   const [photo, setPhoto] = useState("");
   const selectedProduct = session.research?.products?.find(product => product.id === session.research?.campaign?.selectedProductId);
-  const photos = session.research?.assets?.filter(asset => asset.eligibleAsProductReference && asset.productIds.includes(selectedProduct?.id ?? ""))
+  const photos = session.research?.assets?.filter(asset => asset.eligibleAsProductReference && asset.classification === "verified_structure" && asset.productIds.includes(selectedProduct?.id ?? ""))
     .map(asset => ({ id: asset.id, url: asset.originalUrl, source: selectedProduct!.canonicalUrl, title: selectedProduct!.title })) ?? [];
   return (
     <>
@@ -128,8 +129,14 @@ export function BriefEditor({
       (session.research ? resolveBrandTokens(session.research) : undefined),
   });
   const [dirty, setDirty] = useState(brief.design?.version !== 2 || !brief.tokens);
-  const uncertain = [brief.backgroundCheckpoint, brief.sceneCheckpoint].some(c => c?.state === "attempted" && !c.provider);
-  const canFinish = !uncertain && !!(brief.backgroundCheckpoint || brief.sceneCheckpoint) && !completedVariant;
+  const researchedPrice = session.research?.products?.find(product => product.id === draft.productId)?.price;
+  const formattedPrice = (() => {
+    if (!researchedPrice) return null;
+    try { return new Intl.NumberFormat("en-US", { style: "currency", currency: researchedPrice.currency, currencyDisplay: "symbol" }).format(researchedPrice.amount); }
+    catch { return null; }
+  })();
+  const uncertain = brief.sceneCheckpoint?.state === "attempted" && !brief.sceneCheckpoint.provider;
+  const canFinish = !uncertain && !!brief.sceneCheckpoint && !completedVariant;
   function updateDesign(values: Partial<DesignSpec>) {
     update({ design: { ...draft.design, ...values } });
   }
@@ -207,19 +214,7 @@ export function BriefEditor({
           />
           <fieldset disabled={busy}>
             <legend>Creative design</legend>
-            <label htmlFor="template">Template</label>
-            <select
-              id="template"
-              value={draft.design.template}
-              onChange={(event) =>
-                updateDesign({
-                  template: event.target.value as DesignSpec["template"],
-                })
-              }
-            >
-              <option value="copy-top">Copy above photo</option>
-              <option value="photo-top">Photo above copy</option>
-            </select>
+            <p className="muted small">The logo stays in the top-left, the headline stays at the top, and the image remains full-bleed behind them.</p>
             <label htmlFor="alignment">Alignment</label>
             <select
               id="alignment"
@@ -269,14 +264,16 @@ export function BriefEditor({
               <option value="standard">Standard</option><option value="large">Large</option>
             </select>
             <label htmlFor="variation">New variation</label>
-            <select id="variation" value={draft.variation ?? "auto"} onChange={event => update({ variation: event.target.value as Brief["variation"] })}>
-              <option value="auto">Reuse compatible saved images</option><option value="scene">Another product scene</option><option value="background">Another background and scene</option>
+            <select id="variation" value={draft.variation === "background" ? "scene" : draft.variation ?? "auto"} onChange={event => update({ variation: event.target.value as Brief["variation"] })}>
+              <option value="auto">Reuse compatible complete scene</option><option value="scene">Generate a fresh complete scene</option>
             </select>
             <p className="notice">{dirty ? "Save edits to see the updated generation plan before approving." : executionSummary(brief.executionPlan)}</p>
-            {!dirty && brief.executionPlan && <p className="muted small">{Number(brief.executionPlan.background.action === "generate") + Number(brief.executionPlan.scene.action === "generate")} image generation calls planned. Copy is rendered exactly after generation.</p>}
+            {!dirty && brief.executionPlan && <p className="muted small">{Number(brief.executionPlan.scene.action === "generate")} image generation {brief.executionPlan.scene.action === "generate" ? "call" : "calls"} planned. Copy is rendered exactly after generation.</p>}
             <p>Font: bundled Geist fallback, not the brand’s actual font. Color emojis use Twemoji.</p>
           </fieldset>
 
+          <label>Researched price</label>
+          <p>{formattedPrice ?? "No verified price found — none will be shown."}</p>
           <label htmlFor="offer">Supported offer</label>
           <select
             id="offer"
@@ -298,7 +295,7 @@ export function BriefEditor({
             if (asset) update({ referenceAssetId: asset.id, referenceImage: asset.originalUrl });
           }}>
             {!draft.referenceAssetId && <option value="">Choose a verified product photo</option>}
-            {session.research?.assets?.filter(asset => asset.eligibleAsProductReference && asset.productIds.includes(draft.productId ?? "")).map((asset, index) => <option key={asset.id} value={asset.id}>Product photo {index + 1} · {asset.role.replaceAll("_", " ")}</option>)}
+            {session.research?.assets?.filter(asset => asset.eligibleAsProductReference && asset.classification === "verified_structure" && asset.productIds.includes(draft.productId ?? "")).map((asset, index) => <option key={asset.id} value={asset.id}>Shopify product photo {index + 1}</option>)}
           </select>
           <p className="muted small">To advertise another product, select it in Research first.</p>
           <p className="muted small">
@@ -362,14 +359,14 @@ export function AdsView({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("");
   const groups = groupVariants(session.variants);
-  const variant = session.variants.find((v) => v.id === selected);
+  const published = session.variants.filter(isPublishedVariant);
+  const variant = published.find((v) => v.id === selected);
   if (variant) {
     const history = groups.find((g) => g.some((v) => v.id === variant.id)) || [
       variant,
     ];
     const versionNumber = history.findIndex((v) => v.id === variant.id) + 1;
-    const deterministicPass = !!variant.review?.checks.length && variant.review.checks.every((check) => check.passed);
-    const canAccept = deterministicPass && (variant.status === "reviewed" || variant.status === "needs_human");
+    const canAccept = ["reviewed", "needs_changes", "needs_human", "review_failed", "approved"].includes(variant.status);
     const criteria = variant.review ? [
       { label: "Product appearance", ...variant.review.visual.productFidelity },
       { label: "Text legibility", ...variant.review.visual.textLegibility },
@@ -389,11 +386,12 @@ export function AdsView({
             <p className="muted small" aria-live="polite">
               Viewing Version {versionNumber} of {history.length}
             </p>
-            <img
+            <AdPreviewImage
               key={variant.id}
-              className="ad-preview"
+              frameClassName="ad-preview-frame"
               src={variant.imageUrl}
               alt={`Version ${versionNumber}: ${variant.brief.headline}`}
+              priority
             />
           </div>
           <div>
@@ -404,10 +402,10 @@ export function AdsView({
                   variant.reviewError ||
                   "The automated review is still pending."}
               </p>
-              {criteria.map((criterion) => <p className="review-finding" key={criterion.label}><strong>{criterion.label} · {criterion.status === "uncertain" ? "Needs your judgement" : "Changes needed"}</strong><br />{criterion.reason}</p>)}
+              {criteria.map((criterion) => <p className="review-finding" key={criterion.label}><strong>{criterion.label} · {criterion.status === "uncertain" ? "Check this" : "Suggested change"}</strong><br />{criterion.reason}</p>)}
               {variant.review?.checks.filter((check) => !check.passed).map((check) => <p className="review-finding" key={check.name}><strong>{check.name}</strong><br />{check.detail}</p>)}
               <p className="muted small">
-                {variant.acceptance ? `Accepted on ${new Date(variant.acceptance.acceptedAt).toLocaleString()}. Automated findings are kept with this version.` : variant.status === "needs_human" && canAccept ? "The automated review is uncertain. Compare the original and accept when you’re satisfied with this creative." : "Your acceptance is separate from the automated checks."}
+                {variant.acceptance ? `Accepted on ${new Date(variant.acceptance.acceptedAt).toLocaleString()}. Automated feedback is kept with this version.` : "Automated feedback is advisory. Accept this version, edit it with feedback, or generate a fresh visual."}
               </p>
               <div className="actions">
                 <Button
@@ -418,6 +416,12 @@ export function AdsView({
                   }
                 >
                   {variant.status === "approved" ? "Accepted ✓" : "Accept ad"}
+                </Button>
+                <Button
+                  disabled={busy}
+                  onClick={() => void action({ action: "regenerateAd", requestId: crypto.randomUUID(), variantId: variant.id })}
+                >
+                  Regenerate visual
                 </Button>
                 {variant.status === "review_failed" && (
                   <Button
@@ -437,7 +441,7 @@ export function AdsView({
               >
                 Download image ↓
               </a>
-              <details className="ad-review-evidence" open={variant.status === "needs_human"}>
+              <details className="ad-review-evidence" open={variant.review?.verdict !== "pass"}>
                 <summary>Original photo & review details</summary>
                 <img className="reference" src={variant.sourceAssetId ? `/api/assets/${variant.sourceAssetId}` : variant.referenceImage} alt="Saved original product for comparison" />
                 <p className="small muted">Compare the shape, colors, branding, and visible product details.</p>
@@ -504,18 +508,18 @@ export function AdsView({
       {!visible.length ? (
         <EmptyState
           title={
-            session.variants.length
+            published.length
               ? "No matching ads"
               : "Your first ad starts with a brief"
           }
         >
-          {session.variants.length
+          {published.length
             ? "Try another search or status."
             : "Choose a product and a direction, then approve the brief to generate your first ad."}
         </EmptyState>
       ) : (
         <div className="ad-grid">
-          {visible.map((group) => {
+          {visible.map((group, index) => {
             const v = group[group.length - 1];
             return (
               <button
@@ -523,9 +527,12 @@ export function AdsView({
                 key={group[0].id}
                 onClick={() => select(v.id)}
               >
-                <div className="ad-thumbnail">
-                  <img src={v.imageUrl} alt={v.brief.headline} loading="lazy" />
-                </div>
+                <AdPreviewImage
+                  frameClassName="ad-thumbnail"
+                  src={v.imageUrl}
+                  alt={v.brief.headline}
+                  priority={index === 0}
+                />
                 <div className="ad-caption">
                   <Badge tone={v.status === "approved" ? "success" : "neutral"}>
                     {v.status === "approved" ? "Accepted" : statusLabels[v.status]}
@@ -545,6 +552,34 @@ export function AdsView({
   );
 }
 
+function AdPreviewImage({ src, alt, frameClassName, priority = false }: {
+  src: string;
+  alt: string;
+  frameClassName: string;
+  priority?: boolean;
+}) {
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  return (
+    <div className={`ad-image-frame ${frameClassName} is-${state}`}>
+      {state !== "ready" && (
+        <span className="ad-image-state" role={state === "error" ? "alert" : "status"}>
+          {state === "error" ? "Preview unavailable" : "Loading preview…"}
+        </span>
+      )}
+      <img
+        src={src}
+        alt={alt}
+        width={576}
+        height={1024}
+        loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : "auto"}
+        onLoad={() => setState("ready")}
+        onError={() => setState("error")}
+      />
+    </div>
+  );
+}
+
 function RefinementForm({ variantId, busy, action }: {
   variantId: string;
   busy: boolean;
@@ -556,10 +591,10 @@ function RefinementForm({ variantId, busy, action }: {
     if (busy || !feedback.trim()) return;
     if (await action({ action: "refineAd", requestId: crypto.randomUUID(), variantId, feedback: feedback.trim() })) setFeedback("");
   }}>
-    <h2>Make it yours</h2>
+    <h2>Edit with feedback</h2>
     <label htmlFor={`feedback-${variantId}`}>What would you change?</label>
     <textarea id={`feedback-${variantId}`} value={feedback} onChange={(event) => setFeedback(event.target.value)} rows={3} maxLength={2000} disabled={busy} placeholder="Shorten the headline, use a warmer background…" />
     <p className="small muted">Creates a new version and keeps this one.</p>
-    <Button primary disabled={busy || !feedback.trim()}>Create revision →</Button>
+    <Button primary disabled={busy || !feedback.trim()}>Edit & create revision →</Button>
   </form>;
 }

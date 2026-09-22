@@ -4,6 +4,9 @@ import remarkGfm from "remark-gfm";
 import type { ConciergeMessage } from "@/lib/workflow/agents/concierge";
 import type { Session } from "@/lib/workflow/session-types";
 import { Badge, Button } from "./ui";
+export type ChatAttachment =
+  | { kind: "variant"; id: string; headline: string }
+  | { kind: "product"; productId: string; variantId: string | null; label: string };
 const toolLabels: Record<string, string> = {
   research: "Researching your brand",
   prepareBrief: "Preparing the creative brief",
@@ -31,7 +34,7 @@ export function ChatPanel({
   send: (s: string) => void;
   busy: boolean;
   error?: string;
-  attachment: { id: string; headline: string } | null;
+  attachment: ChatAttachment | null;
   detach: () => void;
   openBrief: () => void;
   refresh: () => void;
@@ -169,8 +172,14 @@ export function ChatPanel({
         {attachment && (
           <div className="attachment">
             <span>
-              Feedback on: {attachment.headline}
-              <small>{attachment.id.slice(0, 8)}</small>
+              {attachment.kind === "variant"
+                ? `Feedback on: ${attachment.headline}`
+                : `Planning for: ${attachment.label}`}
+              <small>
+                {attachment.kind === "variant"
+                  ? attachment.id.slice(0, 8)
+                  : "Campaign product"}
+              </small>
             </span>
             <button
               type="button"
@@ -190,7 +199,9 @@ export function ChatPanel({
           value={input}
           maxLength={8000}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Share a thought or a new direction…"
+          placeholder={attachment?.kind === "product"
+            ? "What angle should this product ad take?"
+            : "Share a thought or a new direction…"}
         />
         <div className="composer-footer">
           <span className="muted small">

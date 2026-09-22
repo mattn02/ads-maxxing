@@ -22,6 +22,16 @@ export function apiError(error: unknown) {
   // Never return provider payloads or errors that might contain credentials.
   return Response.json({ error: safeError(error) }, { status: 502 });
 }
+export function providerStatusCode(error: unknown): number | undefined {
+  const seen = new Set<unknown>();
+  let cause = error;
+  while (cause && typeof cause === "object" && !seen.has(cause) && seen.size < 8) {
+    seen.add(cause);
+    const info = cause as { statusCode?: number; cause?: unknown };
+    if (typeof info.statusCode === "number") return info.statusCode;
+    cause = info.cause;
+  }
+}
 export function safeError(error: unknown): string {
   if (error instanceof WorkflowError) return error.message;
   // SDK errors can wrap fetch/API errors more than once. Inspect metadata only.
@@ -32,7 +42,8 @@ export function safeError(error: unknown): string {
     const info = cause as { statusCode?: number; name?: string; code?: string; cause?: unknown };
     if (info.name === "AI_ToolChoiceViolationError") return "The model did not return the required structured findings. Saved work is retained; no automatic retry was made.";
     if (info.statusCode === 429) return "The AI provider's request limit was reached. Wait a minute before trying again. Saved work is retained; no automatic retry was made.";
-    if (info.statusCode === 401 || info.statusCode === 403) return `Provider authentication failed (HTTP ${info.statusCode}). Check the configured API key and its permissions.`;
+    if (info.statusCode === 401) return "Provider authentication failed (HTTP 401). Check the configured API key.";
+    if (info.statusCode === 403) return "Provider access was denied (HTTP 403). The configured model may require billing or permissions this Gateway account does not have.";
     if (info.statusCode && info.statusCode >= 400) return `Provider request failed (HTTP ${info.statusCode}). Check server diagnostics for the failing stage.`;
     if (["TimeoutError", "AbortError"].includes(info.name || "")) return "The request exceeded its time limit or was interrupted. No automatic retry was made.";
     if (["ECONNRESET", "ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "UND_ERR_CONNECT_TIMEOUT"].includes(info.code || "")) return `Network connection failed (${info.code}). Check connectivity to the service.`;

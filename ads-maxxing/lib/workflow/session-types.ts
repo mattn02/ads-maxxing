@@ -51,6 +51,8 @@ export type Review = {
 export type Variant = Generation & {
   brief: Brief;
   research: Research;
+  /** New creative requests stay hidden until this attempt receives a full pass. */
+  internalAttempt?: { requestId: string; number: 1 | 2 };
   status: "pending_review" | "review_failed" | "needs_changes" | "needs_human" | "reviewed" | "approved";
   review?: Review;
   reviewError?: string;

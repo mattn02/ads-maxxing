@@ -12,22 +12,23 @@ export const designSchema = z.object({
 export type DesignSpec = z.infer<typeof designSchema>;
 export const DEFAULT_DESIGN: DesignSpec = {
   version: 2, template: "copy-top", alignment: "left", headlineStyle: "standard", ctaStyle: "solid",
-  background: { direction: "A clean cream studio setting with soft daylight." },
-  scene: { direction: "The complete referenced product is clearly visible on the studio surface.", productScale: "standard" },
+  background: { direction: "A bold, polished lifestyle setting with natural depth and directional light." },
+  scene: { direction: "An audience-appropriate person actively uses the exact referenced product, with the complete product and contact point clearly visible.", productScale: "standard" },
 };
 /** Geometry is code-owned and shared by generation and deterministic composition. */
-export function templateGeometry(template: DesignSpec["template"]) {
-  return { width: 576, height: 1024, copy: { x: 0, y: template === "copy-top" ? 0 : 576, width: 576, height: 448 },
-    visual: { x: 0, y: template === "copy-top" ? 448 : 0, width: 576, height: 576 } };
+export function templateGeometry(_template: DesignSpec["template"]) {
+  void _template; // Retained for compatibility with saved V2 design records.
+  return { width: 576, height: 1024, copy: { x: 0, y: 0, width: 576, height: 240 },
+    visual: { x: 0, y: 0, width: 576, height: 1024 } };
 }
-export type Stage = "background" | "scene";
+export type Stage = "scene";
 export type StageAsset = { id: string; kind: "generated_background" | "generated_scene"; inputs: Record<string, unknown>; prompt: string; model: string; seed?: number; createdAt: string };
 export type ProviderResult = { imageUrl: string; model: string; seed?: number; requestId?: string };
 export type StageCheckpoint = { state: "attempted" | "output_pending_storage" | "saved"; attemptedAt?: string; provider?: ProviderResult; asset?: StageAsset; failure?: { outcome: "rejected" | "unknown"; message: string } };
 export type StagePlan = { action: "generate" | "reuse"; assetId: string; fingerprint: string };
-export type ExecutionPlan = Record<Stage, StagePlan>;
+export type ExecutionPlan = { scene: StagePlan };
 export function executionSummary(plan?: ExecutionPlan) {
-  return plan ? `${plan.background.action === "reuse" ? "Reuse background" : "Generate background"} · ${plan.scene.action === "reuse" ? "reuse product scene" : "generate product scene"} · render ad` : "Save a revision to calculate generation steps.";
+  return plan ? `${plan.scene.action === "reuse" ? "Reuse product scene" : "Generate complete product scene"} · render exact copy` : "Save a revision to calculate generation steps.";
 }
 const color = z.string().regex(/^#[0-9a-f]{6}$/i);
 export const brandTokensSchema = z.object({
@@ -35,7 +36,7 @@ export const brandTokensSchema = z.object({
   fontId: z.literal("geist-fallback"),
 });
 export type BrandTokens = z.infer<typeof brandTokensSchema>;
-export const RENDERER_VERSION = 3;
+export const RENDERER_VERSION = 5;
 export type VisualInputs = {
   researchId: string; productUrl: string; referenceImage: string; visualDirection: string;
   model: string; background: string; accent: string;

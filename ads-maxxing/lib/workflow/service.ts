@@ -39,7 +39,7 @@ export class Workflow {
 
   private assertResearchEditable() {
     const brief = this.session.brief;
-    if (brief && !this.session.variants.some(item => item.brief.id === brief.id) && [brief.backgroundCheckpoint, brief.sceneCheckpoint].some(stage => stage?.state === "attempted" && !stage.provider)) {
+    if (brief && !this.session.variants.some(item => item.brief.id === brief.id) && brief.sceneCheckpoint?.state === "attempted" && !brief.sceneCheckpoint.provider) {
       throw new WorkflowError("Resolve the unfinished image attempt before changing this campaign. Use its explicit retry control and acknowledge any possible duplicate charge.", 409);
     }
   }
@@ -206,6 +206,24 @@ export class Workflow {
     return this.continueCampaign(requestId);
   }
 
+  async regenerateAd(requestId: string, variantId: string) {
+    const current = this.session.researchState?.generationIntent;
+    if (current?.requestId === requestId) return this.session;
+    const parent = this.session.variants.find(item => item.id === variantId);
+    if (!parent) throw new WorkflowError("Ad not found.", 404);
+    const research = this.session.research;
+    if (!research?.campaign || !parent.brief.productId) throw new WorkflowError("Research this product before regenerating its ad.", 409);
+    const member = { productId: parent.brief.productId, variantId: parent.brief.variantId ?? null };
+    if (!scopeForCampaign(research.campaign, research.products || []).members.some(item => item.productId === member.productId && item.variantId === member.variantId)) throw new WorkflowError("This ad's product is no longer included. Include it in the campaign before regenerating.", 409);
+    await this.selectCampaignMember(member.productId, member.variantId);
+    const source = { direction: this.session.research!.campaign?.direction?.text || parent.brief.direction } as const;
+    this.session.researchState!.generationIntent = { requestId, source, researchId: this.session.research!.id, authorizedAt: new Date().toISOString() };
+    const brief = await this.proposeBrief({ ...parent.brief, variation: "scene", feedback: "Create a fresh visual variation.", parentVariantId: parent.id }, "campaign_generate");
+    this.session.researchState!.generationIntent.briefId = brief.id;
+    await this.deps.save(this.session);
+    return this.session;
+  }
+
   private async event(action: string, status: "started" | "completed" | "failed", detail?: string) {
     this.session.events.push({ at: new Date().toISOString(), action, status, ...(detail ? { detail } : {}) });
     await this.deps.save(this.session);
@@ -334,9 +352,9 @@ export class Workflow {
     next.sourceAssetId = parent?.sourceAssetId && parent.brief.productId === next.productId && parent.brief.referenceAssetId === next.referenceAssetId && (parent.brief.variantId ?? null) === (next.variantId ?? null) && parent.referenceImage === next.referenceImage
       ? parent.sourceAssetId : await (this.deps.pinSourceAsset ?? pinSourceAsset)({ sourceUrl: next.referenceImage, researchId: research.id });
     const logoCandidateId = data.logoAssetId === null ? null : data.logoAssetId ?? research.brandKit?.selectedLogoAssetId;
-    const logo = research.assets?.find(asset => asset.id === logoCandidateId && asset.role === "logo");
+    const logo = research.assets?.find(asset => asset.id === logoCandidateId && asset.role === "logo" && ["verified_structure", "user_confirmed"].includes(asset.classification));
     if (logo) next.logoSourceAssetId = await (this.deps.pinSourceAsset ?? pinSourceAsset)({ sourceUrl: logo.originalUrl, researchId: research.id, kind: "logo" });
-    next.executionPlan = retryFrom ? retryExecution(next, retryFrom) : planExecution(next, parent);
+    next.executionPlan = retryFrom ? retryExecution(next, research, retryFrom) : planExecution(next, research, parent);
     this.session.brief = next;
     if (approvalOrigin === "campaign_generate" && this.session.researchState?.generationIntent) this.session.researchState.generationIntent.briefId = next.id;
     await this.event("brief", "completed", approvalOrigin === "campaign_generate" ? "Creative plan saved for your requested generation." : "Waiting for human approval of this revision and photo.");
@@ -355,7 +373,7 @@ export class Workflow {
     await this.requireDesign();
     if (brief.generationAttemptedAt) throw new WorkflowError("This revision already attempted generation. Draft and approve a new revision to try again.", 409);
     groundBrief(brief, this.session.research!, false);
-    validatePlan(brief);
+    validatePlan(brief, this.session.research!);
     if (!brief.sourceAssetId || !await (this.deps.readAsset ?? readAsset)(brief.sourceAssetId)) throw new WorkflowError("The saved original photo is missing. Restore it before approval.");
     brief.approvedAt = new Date().toISOString();
     await this.event("approve_brief", "completed", id);
@@ -371,10 +389,19 @@ export class Workflow {
     if (!brief?.approvedAt || !research || brief.researchId !== research.id) throw new WorkflowError("Approve the current brief and product photo before generating.", 409);
     groundBrief(brief, research, false);
     await validateCreative(brief, research);
-    validatePlan(brief);
+    validatePlan(brief, research);
+    let intent = this.session.researchState?.generationIntent;
+    if (!intent || intent.briefId !== brief.id) {
+      const direction = research.campaign?.direction?.text || brief.direction || "Approved creative brief";
+      this.session.researchState ??= { stage: research.campaign?.status || "ready_for_brief", direction: research.campaign?.direction ?? undefined };
+      intent = this.session.researchState.generationIntent = {
+        requestId: randomUUID(), source: { direction }, researchId: research.id, briefId: brief.id, authorizedAt: new Date().toISOString(),
+      };
+      await this.deps.save(this.session); // Persist the generation request before paid work.
+    }
     const parent = this.session.variants.find(variant => variant.id === brief.parentVariantId);
-    const saved: Partial<Record<Stage, NonNullable<typeof brief.backgroundCheckpoint>["asset"]>> = {};
-    for (const stage of ["background", "scene"] as const) {
+    const saved: Partial<Record<Stage, NonNullable<typeof brief.sceneCheckpoint>["asset"]>> = {};
+    for (const stage of ["scene"] as const) {
       const checkpoint = brief[`${stage}Checkpoint`];
       const plan = brief.executionPlan![stage];
       const asset = checkpoint?.state === "saved" ? checkpoint.asset : plan.action === "reuse" ? parent?.[`${stage}Asset`] : undefined;
@@ -391,7 +418,7 @@ export class Workflow {
           if (brief[`${stage}Checkpoint`]?.attemptedAt) throw new WorkflowError(`The ${stage} request was already attempted.`, 409);
           // The HTTP handler has five minutes. Leave the full 150-second fal
           // timeout plus two 30-second persistence calls (attempt and result).
-          // A saved background can resume in a fresh request without paying again.
+          // A saved provider result can resume in a fresh request without paying again.
           if (this.requestDeadline - (this.deps.now ?? Date.now)() < 210_000) {
             throw new ContinueInFreshRequest("The request is nearly out of time. Saved stages are retained; continue in a fresh request. No new image request was made.", 409);
           }
@@ -440,7 +467,7 @@ export class Workflow {
       await this.run("review", async () => {
         const result = await this.deps.reviewAd(variant);
         variant.review = result;
-        variant.status = result.verdict === "pass" ? "reviewed" : result.verdict;
+        variant.status = "reviewed";
         delete variant.reviewError;
       });
     } catch (error) {
@@ -462,9 +489,10 @@ export class Workflow {
     const variant = this.session.variants.find(item => item.id === id);
     if (!variant) throw new WorkflowError("Variant not found.", 404);
     if (variant.status === "approved") return variant;
-    if (!["reviewed", "needs_human"].includes(variant.status) || !variant.review || !["pass", "needs_human"].includes(variant.review.verdict) || !variant.review.checks.length || variant.review.checks.some(check => !check.passed)) throw new WorkflowError("Resolve the review findings before approving this ad.", 409);
+    if (!["reviewed", "needs_changes", "needs_human", "review_failed"].includes(variant.status)) throw new WorkflowError("Wait for generation to finish before accepting this ad.", 409);
+    const acceptedAt = new Date().toISOString();
     variant.status = "approved";
-    variant.acceptance = { acceptedAt: new Date().toISOString(), reviewedAt: variant.review.createdAt };
+    variant.acceptance = { acceptedAt, reviewedAt: variant.review?.createdAt ?? acceptedAt };
     await this.event("approve_ad", "completed", id);
     return variant;
   }

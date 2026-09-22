@@ -2,6 +2,12 @@ import { z } from "zod";
 import { designSchema } from "./creative/schema";
 
 const shortText = z.string().trim().min(1).max(2000);
+// Keep provider JSON Schema portable while retaining strict URL validation locally.
+// z.string().url() emits `format: uri`, which some structured-output providers reject.
+const observedSourceUrl = z.string().trim().refine(value => {
+  try { return ["http:", "https:"].includes(new URL(value).protocol); }
+  catch { return false; }
+}, "Use an HTTP or HTTPS URL.");
 // Normalize common model formatting without accepting malformed URLs or IDs.
 const researchUrl = z.string().trim().transform(value => {
   const link = value.match(/^\[[^\]]*\]\(([^\s)]+)\)$/);
@@ -20,13 +26,17 @@ export const researchInputSchema = z.object({
   campaignUrl: optionalResearchUrl.describe("Optional campaign page URL; use null when absent."),
 });
 export const findingsSchema = z.object({
-  voice: shortText.describe("Inferred brand voice; say unknown when evidence is insufficient."),
+  voice: shortText.describe("Concise inferred brand tone from customer-facing copy; use exactly unknown only when meaningful copy is absent."),
   audience: shortText.describe("Inferred audience; say unknown when evidence is insufficient."),
   sales: z.array(z.object({
     description: shortText,
-    sourceUrl: z.string().url(),
+    sourceUrl: observedSourceUrl,
     quote: shortText.describe("Verbatim source excerpt including conditions; never invent a deal."),
   })).max(10),
+});
+export const adCopySchema = z.object({
+  headline: z.string().trim().min(1).max(120),
+  cta: z.string().trim().min(1).max(50),
 });
 export const briefSchema = z.object({
   design: designSchema.optional(),
@@ -34,11 +44,11 @@ export const briefSchema = z.object({
   referenceAssetId: z.string().optional(),
   variantId: z.string().nullable().optional(),
   logoAssetId: z.string().nullable().optional(),
-  variation: z.enum(["auto", "scene", "background"]).optional().describe("Use auto to reuse compatible assets. scene explicitly requests another scene; background requests another environment and scene."),
+  variation: z.enum(["auto", "scene", "background"]).optional().describe("Use auto to reuse a compatible complete scene. scene requests a fresh complete scene. background is a legacy alias for a fresh complete scene."),
   productUrl: z.string().url(),
   referenceImage: z.string().url(),
-  headline: z.string().trim().min(1).max(120),
-  cta: z.string().trim().min(1).max(50),
+  headline: adCopySchema.shape.headline,
+  cta: adCopySchema.shape.cta,
   direction: shortText,
   saleId: optionalId.describe("An existing researched sale ID, or JSON null for no offer."),
   feedback: z.string().max(2000).describe("User feedback driving this revision; empty for the first draft."),
