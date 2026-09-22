@@ -224,3 +224,12 @@ test("scene normalization preserves full portrait extent and rejects landscape o
   await assert.rejects(normalizeScenePng(png), /portrait image/);
   await assert.rejects(normalizeScenePng(Buffer.from("bad")), /return a PNG/);
 });
+
+test("review accepts verified structured product assets absent the page image list and rejects crossed associations", async () => {
+  const h = await harness(); await h.approve(); const variant = await h.workflow.generate();
+  const saved = structuredClone(variant);
+  saved.research.sources[0].images = []; // JSON-LD source photo, not in Firecrawl's separate image list.
+  assert.equal(codeChecks(saved, h.bytes.get(saved.id)!).find(check => check.name === "source_photo")!.passed, true);
+  saved.research.assets!.find(asset => asset.id === saved.brief.referenceAssetId)!.productIds = ["other-product"];
+  assert.equal(codeChecks(saved, h.bytes.get(saved.id)!).find(check => check.name === "source_photo")!.passed, false);
+});

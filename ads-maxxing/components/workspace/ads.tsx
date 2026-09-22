@@ -165,7 +165,7 @@ export function BriefEditor({
             src={draft.referenceImage === brief.referenceImage && brief.sourceAssetId ? `/api/assets/${brief.sourceAssetId}` : draft.referenceImage}
             alt="Exact product reference for this ad"
           />
-          <Badge>{brief.sourceAssetId ? "Saved original photo" : "Source photo needs saving"}</Badge>
+          <Badge>{brief.sourceAssetId && draft.referenceImage === brief.referenceImage ? "Saved original photo" : "Source photo needs saving"}</Badge>
           <a href={draft.productUrl} target="_blank" rel="noreferrer">
             View product ↗
           </a>

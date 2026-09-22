@@ -44,4 +44,4 @@ export type VisualAsset = {
   id: string; inputs: VisualInputs; prompt: string; model: string; seed?: number; createdAt: string;
 };
 /** Supplied only by trusted server code after asset verification, never by the design spec. */
-export type VerifiedLogo = { bytes: Buffer; width: number; height: number };
+export type VerifiedLogo = { bytes: Buffer; width: number; height: number; mime?: string };

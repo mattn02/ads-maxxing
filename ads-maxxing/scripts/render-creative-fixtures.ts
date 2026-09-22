@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { imageMetadata } from "../lib/workflow/asset-download";
 import { ImageResponse } from "next/og";
 import { createElement } from "react";
 import { renderCreative } from "../lib/workflow/creative/render";
@@ -23,7 +24,7 @@ async function main() {
         design: { ...DEFAULT_DESIGN, template, alignment: dark ? "center" : "left", ctaStyle: dark ? "outline" : "solid" },
         tokens: { ...resolveBrandTokens(research), background: dark ? "#171717" : "#f6f3ee", foreground: dark ? "#ffffff" : "#000000" } };
       const original = process.argv[3] ? await readFile(process.argv[3]) : sourceVisual;
-      const visual = Buffer.from(await new ImageResponse(createElement("div", { style: { display: "flex", width: 576, height: 1024, background: "#f4ded0", position: "relative" } }, createElement("img", { src: `data:image/png;base64,${original.toString("base64")}`, width: 576, height: 576, style: { position: "absolute", top: template === "copy-top" ? 448 : 0, objectFit: "contain" } })), { width: 576, height: 1024 }).arrayBuffer());
+      const visual = Buffer.from(await new ImageResponse(createElement("div", { style: { display: "flex", width: 576, height: 1024, background: "#f4ded0", position: "relative" } }, createElement("img", { src: `data:${imageMetadata(original).mime};base64,${original.toString("base64")}`, width: 576, height: 576, style: { position: "absolute", top: template === "copy-top" ? 448 : 0, objectFit: "contain" } })), { width: 576, height: 1024 }).arrayBuffer());
       const png = await renderCreative({ brief, research, tokens: brief.tokens!, visualBytes: visual, logoBytes: { bytes: logo, width: 120, height: 24 } });
       await writeFile(path.join(output, `${template}-${dark ? "dark" : "light"}.png`), png);
     }

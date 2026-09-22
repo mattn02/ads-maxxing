@@ -16,6 +16,11 @@ export function codeChecks(variant: Variant, image: Buffer): CodeCheck[] {
   const width = png ? image.readUInt32BE(16) : 0;
   const height = png ? image.readUInt32BE(20) : 0;
   const sale = research.sales.find(item => item.id === brief.saleId);
+  const product = research.products?.find(product => product.id === brief.productId);
+  const source = research.assets?.find(asset => asset.id === brief.referenceAssetId);
+  const groundedPhoto = research.schemaVersion === 2
+    ? !!product && !!source && product.canonicalUrl === brief.productUrl && source.originalUrl === variant.referenceImage && source.originalUrl === brief.referenceImage && source.eligibleAsProductReference && ["product_photo", "product_lifestyle"].includes(source.role) && product.assetIds.includes(source.id) && source.productIds.includes(product.id) && (!brief.variantId || source.variantIds.includes(brief.variantId))
+    : research.sources.some(source => source.url === brief.productUrl && source.images.includes(variant.referenceImage));
   return [
     ...(variant.rendererVersion === undefined ? [] : [
       { name: "design_contract", passed: designSchema.safeParse(brief.design).success && brandTokensSchema.safeParse(brief.tokens).success && JSON.stringify(variant.design) === JSON.stringify(brief.design) && JSON.stringify(variant.tokens) === JSON.stringify(brief.tokens), detail: "Renderer uses the approved design and token snapshot." },
@@ -25,7 +30,7 @@ export function codeChecks(variant: Variant, image: Buffer): CodeCheck[] {
       { name: "exact_copy", passed: variant.renderedCopy?.headline === brief.headline && variant.renderedCopy?.cta === brief.cta && variant.renderedCopy?.offer === (sale?.quote ?? null), detail: "Headline, CTA and complete offer quote were passed unchanged to composition." },
     ]),
     { name: "portrait_9_16", passed: width > 0 && height > 0 && width * 16 === height * 9, detail: `${width} × ${height}` },
-    { name: "source_photo", passed: research.sources.some(source => source.url === brief.productUrl && source.images.includes(variant.referenceImage)), detail: "Reference must come from the selected scraped page." },
+    { name: "source_photo", passed: groundedPhoto, detail: "Saved reference candidate belongs to the selected product and variant, with verified product-photo eligibility." },
     { name: "approved_brief", passed: !!brief.approvedAt && brief.researchId === research.id, detail: "Generation must use the approved research and brief." },
     { name: "sale_evidence", passed: !brief.saleId || !!sale && hasEvidence(sale, research.sources), detail: "Selected offer must have an exact quote in its saved source. This does not prove current eligibility." },
   ];

@@ -5,7 +5,7 @@ import type { CopyLayout, FittedText } from "./fit";
 import { textRuns } from "./emoji";
 
 type TemplateProps = { design: DesignSpec; tokens: BrandTokens; copy: CopyLayout; visualBytes: Buffer; logoBytes?: VerifiedLogo };
-const dataUrl = (bytes: Buffer) => `data:image/png;base64,${bytes.toString("base64")}`;
+const dataUrl = (bytes: Buffer, mime = "image/png") => `data:${mime};base64,${bytes.toString("base64")}`;
 function TextLines({ text, alignment = "left" }: { text: FittedText; alignment?: "left" | "center" }) {
   return <div style={{ display: "flex", flexDirection: "column", fontSize: text.size, lineHeight: `${text.lineHeight}px`, width: "100%" }}>
     {text.lines.map((line, index) => <div key={index} style={{ whiteSpace: "pre", height: text.lineHeight, display: "flex", alignItems: "center", justifyContent: alignment === "center" ? "center" : "flex-start" }}>
@@ -20,7 +20,7 @@ function ProductVisual({ bytes }: { bytes: Buffer }) {
 }
 function Logo({ logo }: { logo: VerifiedLogo }) {
   const scale = Math.min(160 / logo.width, 28 / logo.height);
-  return <img src={dataUrl(logo.bytes)} alt="" width={logo.width * scale} height={logo.height * scale} style={{ objectFit: "contain", marginBottom: 12 }} />;
+  return <img src={dataUrl(logo.bytes, logo.mime)} alt="" width={logo.width * scale} height={logo.height * scale} style={{ objectFit: "contain", marginBottom: 12 }} />;
 }
 function Headline({ text, alignment }: { text: FittedText; alignment: DesignSpec["alignment"] }) {
   return <div style={{ display: "flex", alignItems: "center", height: 168, width: "100%" }}><TextLines text={text} alignment={alignment} /></div>;
