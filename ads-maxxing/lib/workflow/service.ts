@@ -17,12 +17,15 @@ import type { ResearchAsset } from "./research/contracts";
 import { planExecution, validatePlan, matchesStage } from "./creative/reuse";
 import { readVisual, readAsset, pinSourceAsset } from "./storage";
 
-export type WorkflowDependencies = { loadBrandResearch?: (storeUrl: string) => Promise<Research | null>; research: typeof research; createAd: typeof createAd; reviewAd: typeof reviewAd; save: typeof saveSession; readVisual: typeof readVisual; readAsset?: typeof readAsset; pinSourceAsset?: typeof pinSourceAsset };
+export type WorkflowDependencies = { now?: () => number; loadBrandResearch?: (storeUrl: string) => Promise<Research | null>; research: typeof research; createAd: typeof createAd; reviewAd: typeof reviewAd; save: typeof saveSession; readVisual: typeof readVisual; readAsset?: typeof readAsset; pinSourceAsset?: typeof pinSourceAsset };
 const defaults: WorkflowDependencies = { loadBrandResearch, research, createAd, reviewAd, save: saveSession, readVisual, readAsset, pinSourceAsset };
 
 /** Workflow rules live here, independently of the LLM, HTTP routes and UI. */
 export class Workflow {
-  constructor(public session: Session, private deps: WorkflowDependencies = defaults) {}
+  private readonly requestDeadline: number;
+  constructor(public session: Session, private deps: WorkflowDependencies = defaults) {
+    this.requestDeadline = (deps.now ?? Date.now)() + 300_000;
+  }
 
   private userInput?: { text: string; id?: string };
   setUserInput(text: string, id?: string) { this.userInput = { text, id }; }
@@ -190,6 +193,12 @@ export class Workflow {
         ...saved,
         beforeAttempt: async stage => {
           if (brief[`${stage}Checkpoint`]?.attemptedAt) throw new WorkflowError(`The ${stage} request was already attempted.`, 409);
+          // The HTTP handler has five minutes. Leave the full 150-second fal
+          // timeout plus 30 seconds to persist its result before dispatching.
+          // A saved background can resume in a fresh request without paying again.
+          if (this.requestDeadline - (this.deps.now ?? Date.now)() < 180_000) {
+            throw new WorkflowError("The request is nearly out of time. Saved stages are retained; use Finish saved creative to continue in a fresh request. No new image request was made.", 409);
+          }
           const now = new Date().toISOString();
           brief.generationAttemptedAt ??= now;
           brief[`${stage}Checkpoint`] = { state: "attempted", attemptedAt: now };

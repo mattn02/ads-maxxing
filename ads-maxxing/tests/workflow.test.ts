@@ -26,13 +26,14 @@ const visual: VisualReview = { productFidelity: passing, textLegibility: passing
 function fixture(overrides: Partial<WorkflowDependencies> = {}) {
   const session: Session = { id: randomUUID(), createdAt: "now", updatedAt: "now", messages: [], preferences: {}, variants: [], events: [] };
   let generations = 0;
-  const workflow = new Workflow(session, {
+  const dependencies: WorkflowDependencies = {
     research: async () => makeResearch(), save: async () => {}, readVisual: async () => null,
     pinSourceAsset: async () => "source-fixture", readAsset: async () => Buffer.from("source"),
     createAd: async (current, _research, execution) => { await execution!.beforeAttempt("background"); generations++; return { id: randomUUID(), imageUrl: "/api/outputs/test", model: "test", prompt: `${backgroundPrompt(current)}\n${artistPrompt(current)}`, referenceImage: current.referenceImage, createdAt: "now" }; },
     reviewAd: async () => ({ verdict: "pass", visual, checks: [], createdAt: "now" }), ...overrides,
-  });
-  return { workflow, session, generationCount: () => generations };
+  };
+  const workflow = new Workflow(session, dependencies);
+  return { workflow, session, dependencies, generationCount: () => generations };
 }
 async function draft(workflow: Workflow) {
   await workflow.research({ url: source.url, productUrl: null, campaignUrl: null });
@@ -381,4 +382,42 @@ test("concierge tool payloads omit provider recovery URLs and failed research ne
   assert.equal(failed.session.researchState?.stage, "awaiting_direction");
   assert.match(failedAgent.responseText("Research saved."), /persistence failed/);
   assert.doesNotMatch(failedAgent.responseText("Research saved."), /Brand research is saved/);
+});
+
+
+test("a slow background pauses before paid scene dispatch and resumes on a fresh request", async () => {
+  let now = 0;
+  let backgrounds = 0;
+  let scenes = 0;
+  const { workflow, session, dependencies } = fixture({
+    now: () => now,
+    createAd: async (current, _research, execution) => {
+      if (!execution.background) {
+        await execution.beforeAttempt("background");
+        backgrounds++;
+        now += 125_000;
+        await execution.checkpoint("background", {
+          id: current.executionPlan!.background.assetId, kind: "generated_background", model: "fixture", prompt: "background",
+          inputs: { fingerprint: current.executionPlan!.background.fingerprint }, createdAt: "now",
+        });
+      }
+      await execution.beforeAttempt("scene");
+      scenes++;
+      return { id: randomUUID(), imageUrl: "/api/outputs/test", model: "test", prompt: "scene", referenceImage: current.referenceImage, createdAt: "now" };
+    },
+  });
+  const approved = await draft(workflow);
+  await workflow.approveBrief(approved.id);
+  await assert.rejects(workflow.generate(), /fresh request/);
+  assert.equal(backgrounds, 1);
+  assert.equal(scenes, 0);
+  assert.equal(session.brief!.backgroundCheckpoint?.state, "saved");
+  assert.equal(session.brief!.sceneCheckpoint, undefined);
+  assert.equal(session.brief!.approvedAt, approved.approvedAt);
+  // Reloading the saved state starts a new request budget and reuses its background.
+  const resumed = new Workflow(structuredClone(session), dependencies);
+  const output = await resumed.generate(approved.id);
+  assert.equal(output.status, "reviewed");
+  assert.equal(backgrounds, 1);
+  assert.equal(scenes, 1);
 });
