@@ -30,7 +30,8 @@ export async function downloadImage(input: string, provider = false, limits: { m
     const response = await new Promise<http.IncomingMessage>((resolve, reject) => {
       const address = addresses[0];
       const transport = url.protocol === "https:" ? https : http;
-      const request = transport.get(url, { autoSelectFamily: false, headers: { Accept: "image/png,image/jpeg,image/webp,image/gif", "Accept-Encoding": "identity" }, lookup: (_host, _options, callback) => callback(null, address.address, address.family), signal: AbortSignal.timeout(remaining) }, resolve);
+      const options: http.RequestOptions & { autoSelectFamily: boolean } = { autoSelectFamily: false, headers: { Accept: "image/png,image/jpeg,image/webp,image/gif", "Accept-Encoding": "identity" }, lookup: (_host, _options, callback) => callback(null, address.address, address.family), signal: AbortSignal.timeout(remaining) };
+      const request = transport.get(url, options, resolve);
       request.on("error", reject);
     });
     if ([301,302,303,307,308].includes(response.statusCode ?? 0)) {
