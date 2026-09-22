@@ -267,7 +267,7 @@ test("real AI SDK loop streams research and brief tool results, pauses for appro
   assert.match(response.headers.get("content-type") || "", /text\/event-stream/);
   assert.match(stream, /tool-output-available/);
   assert.doesNotMatch(stream, /tool-input-error|rawInput/);
-  assert.match(stream, /Approve brief and photo/);
+  assert.match(stream, /Approve brief & generate/);
   assert.doesNotMatch(stream, /<tool_call>|Generating now/);
   assert.match(JSON.stringify(session.messages.at(-1)), /Brief saved/);
   assert.equal(generationCount(), 0);
@@ -329,7 +329,7 @@ test("printed tool tags across text chunks are not executed, displayed, or saved
   const stream = await response.text();
   assert.doesNotMatch(stream, /<tool_|Generating now|tool-input-available/);
   assert.match(stream, /did not execute an action/);
-  assert.match(JSON.stringify(session.messages), /Approve brief and photo/);
+  assert.match(JSON.stringify(session.messages), /Approve brief & generate/);
   assert.doesNotMatch(JSON.stringify(session.messages), /<tool_/);
   assert.equal(session.brief!.approvedAt, undefined);
   assert.equal(generationCount(), 0);

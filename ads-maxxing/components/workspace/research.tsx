@@ -107,7 +107,7 @@ export function ResearchView({ session, busy, send, create, action }: {
       <label htmlFor="campaign-direction">Product URL, collection, or campaign direction</label>
       <input id="campaign-direction" required maxLength={1800} value={direction} onChange={event => setDirection(event.target.value)} placeholder="A product URL, or our summer case collection" disabled={busy} />
       <Button disabled={busy} primary>Research this direction →</Button>
-      {awaiting && <div className="actions">{research.suggestions?.map(choice => <Button key={choice.id} disabled={busy} onClick={() => send(`[direction:${choice.id}] Research this direction: ${choice.label}`)}>{choice.label} →</Button>)}</div>}
+      {awaiting && <div className="actions">{research.suggestions?.map(choice => <Button type="button" key={choice.id} disabled={busy} onClick={() => send(`[direction:${choice.id}] Research this direction: ${choice.label}`)}>{choice.label} →</Button>)}</div>}
       {awaiting && <p className="small muted">Suggestions come from store navigation. Choosing one starts scoped research.</p>}
     </form>
     {!!research.products?.length && <><h2>Products <span className="muted">{research.products.length} researched</span></h2><div className="source-grid">{research.products.map(product => <div className="card source-card" key={product.id}>

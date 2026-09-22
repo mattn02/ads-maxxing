@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { research } from "../lib/workflow/agents/researcher";
-import { normalizeScrape } from "../lib/workflow/firecrawl";
+import { readFile } from "node:fs/promises";
+import { normalizeScrape, snapshotHtml } from "../lib/workflow/firecrawl";
 import { extractSource, assetKey, canonicalUrl, pageHint } from "../lib/workflow/research/extract";
 import { userResearchIntent } from "../lib/workflow/research/intent";
 import { parseResearchSnapshot } from "../lib/workflow/research/persistence-schema";
@@ -121,4 +122,36 @@ test("schema column is authoritative, unknown versions and invalid V2 payloads f
 test("retrieval keeps complete branding, final URL, relative images and structured HTML", () => {
   const result = normalizeScrape(home, { data: { metadata: { url: home, title: "Brand" }, images: ["/photo.jpg", "/photo.jpg"], rawHtml: "<html>source</html>", links: ["/products/case"], branding: { colors: { accent: "#abcdff" }, typography: { fontFamily: "Store Font" }, images: { logo: "/logo.svg" } } } });
   assert.deepEqual(result.images, [`${home}photo.jpg`]); assert.equal(result.colors.accent, "#abcdff"); assert.equal(result.rawHtml, "<html>source</html>"); assert.ok(result.branding?.typography);
+});
+
+
+test("large storefront snapshots retain structured data after runtime bundles", () => {
+  const script = `<script type="application/ld+json">${JSON.stringify(node)}</script>`;
+  const html = snapshotHtml("x".repeat(900000) + script);
+  assert.ok(html.length <= 800000); assert.ok(html.includes(script));
+});
+
+test("five live store snapshots preserve product identities, variant ownership and CDN resolution", async () => {
+  const fixtures = JSON.parse(await readFile(new URL("./fixtures/research-five-stores.json", import.meta.url), "utf8")) as { store: string; source: Source; expected: { products: number; eligible: number; variants: number } }[];
+  const expected: Record<string, [number, number]> = { "www.loopycases.com": [1, 27], "blendjet.com": [41, 7], "www.allbirds.com": [1, 13], "www.peakdesign.com": [1, 0], "ugmonk.com": [1, 0] };
+  for (const fixture of fixtures) {
+    const result = extractSource(fixture.source);
+    assert.equal(result.products.length, 1, fixture.store);
+    assert.equal(result.assets.filter(asset => asset.eligibleAsProductReference).length, expected[fixture.store][0], fixture.store);
+    assert.equal(result.products[0].variants.length, expected[fixture.store][1], fixture.store);
+    for (const asset of result.assets.filter(asset => asset.eligibleAsProductReference)) assert.deepEqual(asset.productIds, [result.products[0].id]);
+    if (fixture.store === "www.allbirds.com") assert.ok(Number(new URL(result.assets.find(asset => asset.eligibleAsProductReference)!.originalUrl).searchParams.get("width")) >= 900);
+    if (fixture.store === "blendjet.com") assert.ok(result.assets.filter(asset => asset.eligibleAsProductReference).every(asset => asset.variantIds.length === 1), "Each BlendJet variant's gallery stays assigned to that variant");
+  }
+});
+
+test("owner corrections survive refresh and every research edit revokes pending approval", async () => {
+  const { workflow, session } = workflowFixture();
+  workflow.setUserInput(`Research ${productUrl}`); await workflow.research(input(productUrl));
+  await workflow.correctBrand("voice", "Concise and practical");
+  const historical = structuredClone(session.research!);
+  workflow.setUserInput(`Research ${home}`); await workflow.research(input());
+  assert.equal(session.research!.voice, "Concise and practical");
+  assert.equal(historical.brandKit!.overrides.voice, "Concise and practical");
+  assert.notEqual(session.research!.id, historical.id);
 });

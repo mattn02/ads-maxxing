@@ -13,6 +13,16 @@ async function firecrawl(endpoint: string, body: object, timeout = 75000) {
   if (!result.success) throw new WorkflowError("Firecrawl could not retrieve this page. Try a direct product URL.", 502);
   return result;
 }
+export function snapshotHtml(html: string) {
+  if (html.length <= 800000) return html;
+  // Structured product data often lives after very large storefront CSS/runtime bundles.
+  // Keep complete bounded data scripts first rather than cutting them off at the raw prefix.
+  const scripts = [...html.matchAll(/<script\b[^>]*type=["']application\/(?:ld\+)?json["'][^>]*>[\s\S]*?<\/script>/gi)]
+    .map(match => match[0]).filter(script => script.length <= 200000).sort((a, b) => Number(b.includes("application/ld+json")) - Number(a.includes("application/ld+json")));
+  let retained = "";
+  for (const script of scripts) if (retained.length + script.length <= 400000) retained += script;
+  return retained + html.slice(0, 800000 - retained.length);
+}
 export function normalizeScrape(url: string, result: { data: Record<string, unknown>; creditsUsed?: number }): Source {
   const data = result.data;
   const metadata = (data.metadata || {}) as Record<string, unknown>;
@@ -28,7 +38,7 @@ export function normalizeScrape(url: string, result: { data: Record<string, unkn
     description: String(metadata.ogDescription || metadata.description || "").slice(0, 4000),
     // Preserve candidates before classification, bounded for a snapshot rather than first-page order.
     images: [...new Set(normalized)].slice(0, 300), links: [...new Set(links)].slice(0, 500),
-    markdown: String(data.markdown || "").slice(0, 40000), rawHtml: String(data.rawHtml || data.html || "").slice(0, 800000),
+    markdown: String(data.markdown || "").slice(0, 40000), rawHtml: snapshotHtml(String(data.rawHtml || data.html || "")),
     branding: brand, pageType: pageHint(finalUrl), fetchedAt: new Date().toISOString(), providerUsage: result.creditsUsed,
     colors: Object.fromEntries(Object.entries((brand.colors || {}) as object).filter((entry): entry is [string, string] => typeof entry[1] === "string" && /^#(?:[a-f0-9]{3}|[a-f0-9]{4}|[a-f0-9]{6}|[a-f0-9]{8})$/i.test(entry[1]))),
   };

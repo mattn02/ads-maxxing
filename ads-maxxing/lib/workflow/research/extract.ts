@@ -11,6 +11,11 @@ export function canonicalUrl(value: string) {
   url.pathname = url.pathname.replace(/\/$/, "") || "/";
   return url.href;
 }
+export function productIdentityUrl(value: string) {
+  const url = new URL(canonicalUrl(value));
+  for (const key of ["variant", "selling_plan"]) url.searchParams.delete(key);
+  return url.href;
+}
 export const storeHost = (value: string) => new URL(value).hostname.toLowerCase().replace(/^www\./, "");
 export function pageHint(value: string): NonNullable<Source["pageType"]> {
   const path = new URL(value).pathname.replace(/^\/[a-z]{2}(?:-[a-z]{2})?(?=\/|$)/i, "");
@@ -43,7 +48,7 @@ export function structuredNodes(html: string): Json[] {
   for (const match of html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
     try { output.push(...nodes(JSON.parse(match[1]))); } catch { /* Malformed blocks do not invalidate other sources. */ }
   }
-  return output;
+  return [...new Map(output.map(node => [JSON.stringify(node), node])).values()];
 }
 const isType = (node: Json, type: string) => array(node["@type"]).includes(type);
 const text = (value: unknown) => typeof value === "string" ? value.slice(0, 4000) : "";
@@ -56,6 +61,8 @@ export function extractSource(source: Source): { products: ResearchProduct[]; as
     const id = stableId("asset", assetKey(image));
     const existing = assets.get(id);
     if (existing) {
+      const resolution = (url: string) => Number(new URL(url).searchParams.get("width") || new URL(url).searchParams.get("w") || 0);
+      if (resolution(image) > resolution(existing.originalUrl)) existing.originalUrl = image;
       if (productId && !existing.productIds.includes(productId)) existing.productIds.push(productId);
       if (productId && existing.role === "unknown") { existing.role = role; existing.evidence = evidence; existing.classification = "verified_structure"; existing.eligibleAsProductReference = true; }
       return id;
@@ -66,11 +73,12 @@ export function extractSource(source: Source): { products: ResearchProduct[]; as
     return id;
   };
   for (const node of structured.filter(node => isType(node, "Product") || isType(node, "ProductGroup"))) {
-    const nodeUrl = absolute(node.url, source.url);
+    const declaredOffers = array(node.offers);
+    const nodeUrl = absolute(node.url || (declaredOffers.length === 1 ? object(declaredOffers[0]).url : undefined), source.url);
     // A recommendation's Product node never inherits the main page's identity.
-    if (nodeUrl && canonicalUrl(nodeUrl) !== canonicalUrl(source.finalUrl || source.url)) continue;
+    if (nodeUrl && productIdentityUrl(nodeUrl) !== productIdentityUrl(source.finalUrl || source.url)) continue;
     if (!nodeUrl && pageHint(source.url) !== "product") continue;
-    const canonical = canonicalUrl(nodeUrl || source.finalUrl || source.url);
+    const canonical = productIdentityUrl(nodeUrl || source.finalUrl || source.url);
     const productId = stableId("product", canonical);
     const evidence: Evidence = { sourceUrl: source.url, quote: JSON.stringify(node).slice(0, 4000), method: "json_ld", origin: "observed" };
     const images = array(node.image).flatMap(value => { const image = absolute(typeof value === "string" ? value : object(value).url || object(value).contentUrl, source.url); return image ? [image] : []; });
@@ -78,13 +86,21 @@ export function extractSource(source: Source): { products: ResearchProduct[]; as
     const offers = object(array(node.offers)[0]);
     const amount = Number(offers.price);
     const price = offers.price != null && Number.isFinite(amount) && amount >= 0 && typeof offers.priceCurrency === "string" ? { amount, currency: offers.priceCurrency, availability: text(offers.availability) || null } : null;
-    const variants = array(node.hasVariant).flatMap(value => {
-      const variant = object(value); const storeId = text(variant.sku || variant.productID || variant["@id"]);
+    const ownVariantUrl = nodeUrl ? new URL(nodeUrl) : null;
+    const ownVariantStoreId = ownVariantUrl?.searchParams.get("variant");
+    const ownVariantId = ownVariantStoreId ? stableId("variant", `${productId}:${ownVariantStoreId}`) : null;
+    if (ownVariantId) for (const assetId of assetIds) assets.get(assetId)!.variantIds.push(ownVariantId);
+    const variants = [...array(node.hasVariant), ...declaredOffers.filter(value => object(value).sku).map(value => ({ ...object(value), name: object(value).sku, productID: absolute(object(value).url, source.url) ? new URL(absolute(object(value).url, source.url)!).searchParams.get("variant") : null }))].flatMap(value => {
+      const variant = object(value);
+      const variantUrl = absolute(variant.url || object(variant.offers).url, source.url);
+      if (variantUrl && (new URL(variantUrl).origin !== new URL(canonical).origin || new URL(variantUrl).pathname !== new URL(canonical).pathname)) return [];
+      const storeId = text(variant.productID || variant.sku || variant["@id"] || variant.url);
       if (!storeId) return [];
       const id = stableId("variant", `${productId}:${storeId}`);
       const variantAssets = array(variant.image).flatMap(image => { const url = absolute(typeof image === "string" ? image : object(image).url, source.url); if (!url) return []; const assetId = addAsset(url, "product_photo", evidence, productId); assets.get(assetId)!.variantIds.push(id); return [assetId]; });
       return [{ id, storeId, title: text(variant.name), attributes: Object.fromEntries(["color", "size", "pattern"].flatMap(key => typeof variant[key] === "string" ? [[key, variant[key] as string]] : [])), assetIds: variantAssets }];
     });
+    if (ownVariantId && ownVariantStoreId) variants.push({ id: ownVariantId, storeId: ownVariantStoreId, title: text(node.name), attributes: typeof node.model === "string" ? { model: node.model } : {}, assetIds });
     products.push({ id: productId, canonicalUrl: canonical, storeId: text(node.productID || node.sku || node["@id"]) || null, title: text(node.name) || source.title, description: text(node.description) || source.description, evidence, assetIds: [...new Set([...assetIds, ...variants.flatMap(v => v.assetIds)])], variants, price });
     const rating = object(node.aggregateRating); const value = Number(rating.ratingValue); const best = Number(rating.bestRating || 5);
     if (rating.ratingValue != null && value >= 0 && value <= best && best > 0) customerEvidence.push({ id: stableId("evidence", `${productId}:rating`), kind: "rating", productId, evidence: { ...evidence, quote: JSON.stringify(rating) }, value: `${value}/${best}`, attribution: null, ratingCount: Number.isInteger(Number(rating.ratingCount)) && rating.ratingCount != null ? Number(rating.ratingCount) : null, reviewCount: Number.isInteger(Number(rating.reviewCount)) && rating.reviewCount != null ? Number(rating.reviewCount) : null, checkedAt: source.fetchedAt });
@@ -94,5 +110,11 @@ export function extractSource(source: Source): { products: ResearchProduct[]; as
   for (const logo of logos) { const url = absolute(logo, source.url); if (url) addAsset(url, "logo", { sourceUrl: source.url, quote: url, method: "branding", origin: "observed" }); }
   for (const image of source.images) addAsset(image, "unknown", { sourceUrl: source.url, quote: image, method: "page", origin: "observed" });
   // Shared image membership is valid, but uncertain content still needs human inspection at approval.
-  return { products, assets: [...assets.values()], customerEvidence };
+  const groupedProducts = new Map<string, ResearchProduct>();
+  for (const product of products) {
+    const old = groupedProducts.get(product.id);
+    groupedProducts.set(product.id, old ? { ...old, title: old.title === product.title ? old.title : source.title,
+      assetIds: [...new Set([...old.assetIds, ...product.assetIds])], variants: [...new Map([...old.variants, ...product.variants].map(variant => [variant.id, variant])).values()] } : product);
+  }
+  return { products: [...groupedProducts.values()], assets: [...assets.values()].map(asset => ({ ...asset, variantIds: [...new Set(asset.variantIds)] })), customerEvidence: [...new Map(customerEvidence.map(item => [item.id, item])).values()] };
 }

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { briefSchema, researchInputSchema, type BriefInput, type ResearchInput } from "./schema";
-import type { Brief, Session, Variant } from "./session-types";
+import type { Brief, Research, Session, Variant } from "./session-types";
 import { saveSession } from "./sessions";
 import { safeError, WorkflowError } from "./validation";
 import { research } from "./agents/researcher";
@@ -9,6 +9,7 @@ import { reviewAd } from "./agents/reviewer";
 import { DEFAULT_DESIGN, type Stage } from "./creative/schema";
 import { resolveBrandTokens } from "./creative/tokens";
 import { validateCreative } from "./creative/fit";
+import { adoptBrandContext } from "./research/brand-context";
 import { userResearchIntent } from "./research/intent";
 import { canonicalUrl, pageHint, storeHost } from "./research/extract";
 import { groundBrief } from "./research/grounding";
@@ -16,7 +17,7 @@ import type { ResearchAsset } from "./research/contracts";
 import { planExecution, validatePlan, matchesStage } from "./creative/reuse";
 import { readVisual, readAsset, pinSourceAsset } from "./storage";
 
-export type WorkflowDependencies = { research: typeof research; createAd: typeof createAd; reviewAd: typeof reviewAd; save: typeof saveSession; readVisual: typeof readVisual; readAsset?: typeof readAsset; pinSourceAsset?: typeof pinSourceAsset };
+export type WorkflowDependencies = { loadBrandResearch?: (storeUrl: string) => Promise<Research | null>; research: typeof research; createAd: typeof createAd; reviewAd: typeof reviewAd; save: typeof saveSession; readVisual: typeof readVisual; readAsset?: typeof readAsset; pinSourceAsset?: typeof pinSourceAsset };
 const defaults: WorkflowDependencies = { research, createAd, reviewAd, save: saveSession, readVisual, readAsset, pinSourceAsset };
 
 /** Workflow rules live here, independently of the LLM, HTTP routes and UI. */
@@ -43,10 +44,12 @@ export class Workflow {
   }
   async research(input: ResearchInput) {
     const parsed = researchInputSchema.parse(input);
-    const previous = this.session.research;
+    const savedBrand = !this.session.research ? await this.deps.loadBrandResearch?.(parsed.url) : null;
+    const previous = this.session.research || (savedBrand ? adoptBrandContext(savedBrand) : undefined);
     const intent = this.userInput ? userResearchIntent(this.userInput.text, this.userInput.id, previous) : userResearchIntent([parsed.url, parsed.productUrl, parsed.campaignUrl].filter(Boolean).join(" "));
     const home = previous?.brandKit?.canonicalStoreUrl;
     if (this.userInput) {
+      if (!intent.urls.length && !intent.direction) throw new WorkflowError("Choose a direction explicitly or supply a research URL in your current message.");
       const permitted = new Set(intent.urls.map(canonicalUrl));
       if (home) permitted.add(canonicalUrl(home));
       for (const url of [parsed.url, parsed.productUrl, parsed.campaignUrl].filter((url): url is string => !!url)) {

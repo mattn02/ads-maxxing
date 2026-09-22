@@ -5,7 +5,7 @@ import { workflowModel } from "../models";
 import { findingsSchema, type Findings, type ResearchInput } from "../schema";
 import type { Research, Source } from "../session-types";
 import type { BrandKit, Direction, ResearchV2Fields } from "../research/contracts";
-import { canonicalUrl, extractSource, pageHint, stableId, storeHost } from "../research/extract";
+import { canonicalUrl, extractSource, pageHint, productIdentityUrl, stableId, storeHost } from "../research/extract";
 import { matchingLinks } from "../research/intent";
 import { WorkflowError } from "../validation";
 
@@ -36,7 +36,7 @@ function brandKit(source: Source, findings: Findings, previous?: BrandKit): Bran
   const logos = extractSource(source).assets.filter(asset => asset.role === "logo").map(asset => asset.id);
   return { id: stableId("brand", storeHost(source.url)), revision: (previous?.revision || 0) + 1, canonicalStoreUrl: new URL("/", source.url).href, name: source.title.split(/\s[|–—]\s/)[0], logoAssetIds: logos, selectedLogoAssetId: previous?.selectedLogoAssetId && logos.includes(previous.selectedLogoAssetId) ? previous.selectedLogoAssetId : logos[0] || null,
     colors: Object.entries(source.colors).map(([role, value]) => ({ role, value, evidence: { ...evidence, quote: `${role}: ${value}` } })),
-    typography: { heading: finding(fonts.heading || typography.headingFont || typography.fontFamily), body: finding(fonts.body || typography.bodyFont), renderFont: "geist-fallback", substitution: "Ads use the bundled Geist font; observed store fonts are not licensed or downloaded automatically." },
+    typography: { heading: finding(fonts.heading || typography.headingFont || typography.fontFamily), body: finding(fonts.body || fonts.primary || typography.bodyFont), renderFont: "geist-fallback", substitution: "Ads use the bundled Geist font; observed store fonts are not licensed or downloaded automatically." },
     voice: finding(findings.voice, true), audience: finding(findings.audience, true), valueProposition: finding(source.description), overrides: previous?.overrides || {} };
 }
 /** Bounded stages. A model can synthesize findings but cannot expand the selected scope. */
@@ -111,7 +111,7 @@ export async function research(input: ResearchInput, options: ResearchOptions = 
   const initialFindings: Findings = { voice: previous?.voice || "unknown", audience: previous?.audience || "unknown", sales: [] };
   const interim = assembleResearch(mergedSources, initialFindings, warnings);
   const main = home || mergedSources[0];
-  const selectedId = explicit ? products.find(product => canonicalUrl(product.canonicalUrl) === canonicalUrl(explicit))?.id : undefined;
+  const selectedId = explicit ? products.find(product => productIdentityUrl(product.canonicalUrl) === productIdentityUrl(sources.find(source => canonicalUrl(source.url) === canonicalUrl(explicit))?.finalUrl || explicit))?.id : undefined;
   const stage = !campaign ? "awaiting_direction" : selectedId || products.length === 1 ? "ready_for_brief" : "needs_selection";
   const v2: ResearchV2Fields = { schemaVersion: 2, revision: (previous?.revision || 0) + 1,
     brandKit: campaign && previous?.brandKit ? structuredClone(previous.brandKit) : brandKit(main, initialFindings, previous?.brandKit),
