@@ -23,7 +23,7 @@ FAL_AI_API_KEY=...
 AI_GATEWAY_KEY=...
 ```
 
-Apply [`supabase/migrations/202609220001_workflow.sql`](supabase/migrations/202609220001_workflow.sql) in your Supabase project's SQL editor and enable **anonymous sign-ins** in Authentication. The migration creates the private `creative-assets` bucket. See [Supabase setup and recovery](docs/supabase-setup.md) for provisioning, permissions and verification. Missing Supabase configuration produces a setup error; production has no local-file fallback.
+Apply all three SQL files in [`supabase/migrations/`](supabase/migrations/) in filename order using your Supabase project's SQL editor, then enable **anonymous sign-ins** in Authentication. The migrations create the private `creative-assets` bucket and protect shared brand corrections. See [Supabase setup and recovery](docs/supabase-setup.md) for provisioning, permissions and verification. Missing Supabase configuration produces a setup error; production has no local-file fallback.
 
 ```sh
 npm run dev -- --hostname 127.0.0.1
@@ -103,7 +103,9 @@ npm run typecheck
 npm run build -- --webpack
 ```
 
-The test suite uses mocked providers and temporary/in-memory state; running it does not incur paid generation. It exercises approval and grounding rules, staged research, reference provenance, reuse plans, recovery, exact-copy rendering, ownership and persistence contracts. The integrated implementation passed 57 tests, lint and TypeScript checking on September 22, 2026. SQL and hosted-service checks are documented separately in [Supabase setup](docs/supabase-setup.md). Live Supabase checks passed for two-owner isolation, private bytes and signed URLs, reloads, final image/review/approval persistence, historical approvals, denied client mutations and repeated legacy imports. Those harnesses used synthetic data and made no paid provider calls.
+The test suite uses mocked providers and temporary/in-memory state; running it does not incur paid generation. It exercises approval and grounding rules, staged research, reference provenance, reuse plans, recovery, exact-copy rendering, ownership and persistence contracts. The integrated implementation passed 59 tests, lint and TypeScript checking on September 22, 2026. SQL and hosted-service checks are documented separately in [Supabase setup](docs/supabase-setup.md). Live Supabase checks passed for two-owner isolation, private bytes and signed URLs, reloads, final image/review/approval persistence, historical approvals, denied client mutations and repeated legacy imports. Those harnesses used synthetic data and made no paid provider calls.
+
+The optimized production webpack build also passed. A local browser check against live Supabase completed Loopy homepage research, paused for campaign direction, and restored its brand kit and suggestions after a full reload. A fresh identity also created a campaign and delivered its first chat message exactly once. These checks caught and fixed Next.js internal-hostname origin validation and React Strict Mode first-message cancellation. They did not generate another image or verify a Vercel deployment.
 
 [Research verification](docs/research-implementation.md) records homepage/product checks for Loopy Cases, BlendJet, Allbirds, Peak Design and Ugmonk. These checks establish extraction behavior, not five approved ad campaigns. A separate three-image Loopy vision check preserved structural ownership and left unassociated or uncertain candidates ineligible. [Artist verification](docs/artist-verification.md) records five paid Loopy probes: the Klein scene attempts failed visual inspection; Nano improved the handheld result, while small markings in the simple scene remained uncertain. Mocked reuse tests and diagnostic rendering are not deployed end-to-end verification.
 
