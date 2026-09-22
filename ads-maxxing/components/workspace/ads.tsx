@@ -287,6 +287,11 @@ export function BriefEditor({
             <option value="">No offer</option>
             {session.research?.offers?.filter(offer => offer.eligibility === "eligible" && offer.productIds.includes(draft.productId ?? "")).map(offer => <option key={offer.id} value={offer.id}>{offer.displayCopy}</option>)}
           </select>
+          <label htmlFor="brand-logo">Brand logo</label>
+          <select id="brand-logo" disabled={busy} value={draft.logoAssetId === null ? "" : draft.logoAssetId ?? session.research?.brandKit?.selectedLogoAssetId ?? ""} onChange={event => update({ logoAssetId: event.target.value || null })}>
+            <option value="">No logo</option>
+            {session.research?.assets?.filter(asset => asset.role === "logo" && session.research?.brandKit?.logoAssetIds.includes(asset.id)).map((asset, index) => <option key={asset.id} value={asset.id}>Verified brand logo {index + 1}</option>)}
+          </select>
           <label htmlFor="reference-photo">Reference photo</label>
           <select id="reference-photo" value={draft.referenceAssetId ?? ""} disabled={busy} onChange={event => {
             const asset = session.research?.assets?.find(asset => asset.id === event.target.value);

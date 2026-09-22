@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { randomUUID } from "node:crypto";
 import { Workflow, type WorkflowDependencies } from "../lib/workflow/service";
+import { productResearch } from "./research-fixture";
 import { assembleResearch } from "../lib/workflow/agents/researcher";
 import { artistPrompt, createAd, type ArtistDependencies } from "../lib/workflow/agents/artist";
 import { codeChecks } from "../lib/workflow/agents/reviewer";
@@ -13,9 +14,10 @@ import { renderCreative } from "../lib/workflow/creative/render";
 import { planExecution, validatePlan } from "../lib/workflow/creative/reuse";
 import type { Brief, Source, Session, Variant } from "../lib/workflow/session-types";
 
-const source: Source = { url: "https://store.example/product", images: ["https://store.example/photo.png", "https://store.example/other.png"], title: "A case", description: "A real case", markdown: "Members save 10%. Selected cases only. Ends Friday.", colors: {}, fetchedAt: "now" };
-const research = assembleResearch([source], { voice: "Playful", audience: "Inferred", sales: [{ description: "Member offer", quote: source.markdown, sourceUrl: source.url }] });
-const makeBrief = (): Brief => ({ id: randomUUID(), researchId: research.id, productUrl: source.url, referenceImage: source.images[0], headline: "Hold on to color", cta: "Shop now", direction: "Overall intent", saleId: null, feedback: "", parentVariantId: null, design: { ...DEFAULT_DESIGN }, tokens: resolveBrandTokens(research) });
+const source: Source = { url: "https://store.example/products/case", images: ["https://store.example/photo.png", "https://store.example/other.png"], title: "A case", description: "A real case", markdown: "Members save 10%. Selected cases only. Ends Friday.", colors: {}, fetchedAt: "now" };
+const legacyResearch = assembleResearch([source], { voice: "Playful", audience: "Inferred", sales: [{ description: "Member offer", quote: source.markdown, sourceUrl: source.url }] });
+const research = { ...productResearch(source), sales: legacyResearch.sales };
+const makeBrief = (): Brief => ({ productId: research.products![0].id, referenceAssetId: research.assets!.find(asset => asset.originalUrl === source.images[0])!.id, id: randomUUID(), researchId: research.id, productUrl: source.url, referenceImage: source.images[0], headline: "Hold on to color", cta: "Shop now", direction: "Overall intent", saleId: null, feedback: "", parentVariantId: null, design: { ...DEFAULT_DESIGN }, tokens: resolveBrandTokens(research) });
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCfkAAAAASUVORK5CYII=", "base64");
 
 test("font fitting retains punctuation and complete offer conditions; overflow and missing glyphs are actionable", async () => {
