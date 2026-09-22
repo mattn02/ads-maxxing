@@ -221,8 +221,8 @@ function Workbench({
         </nav>
         <div className="sidebar-bottom">
           <div className="local-note">
-            <span className="status-dot" /> Local workspace
-            <p>Your progress is saved on this device’s server.</p>
+            <span className="status-dot" /> Private workspace
+            <p>Your work saves automatically.</p>
           </div>
           <div className="user-profile">
             <span>D</span>

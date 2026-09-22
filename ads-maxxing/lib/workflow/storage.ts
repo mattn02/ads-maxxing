@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import { createHash, randomUUID } from "node:crypto";
 import type { VisualAsset, VisualInputs } from "./creative/schema";
 import type { Generation } from "./types";
@@ -41,7 +42,9 @@ export const readVisual=readAsset;
 export async function assetProviderUrl(id:string):Promise<string> {
   const asset=await assetRecord(id);if(!asset||asset.storage_state!=="ready")throw new WorkflowError("Saved asset is missing or unavailable.",404);
   const data=await(await supabase(`/storage/v1/object/sign/${asset.bucket}/${asset.storage_path}`,{method:"POST",body:JSON.stringify({expiresIn:600})})).json();
-  return new URL(data.signedURL,`${configuration().url}/storage/v1/`).href;
+  const signed = String(data.signedURL);
+  if(!signed.startsWith("/object/sign/") && !signed.startsWith("/storage/v1/object/sign/"))throw new WorkflowError("Unexpected private asset URL.",502);
+  return `${configuration().url}${signed.startsWith("/storage/v1/")?signed:`/storage/v1${signed}`}`;
 }
 export async function pinSourceAsset(input:{sourceUrl:string;researchId:string;kind?:"product_photo"|"logo"}):Promise<string> {
   const context=ownerContext();const kind=input.kind??"product_photo";
@@ -59,11 +62,18 @@ export async function saveStageAsset(input:{id?:string;kind:"generated_backgroun
   const id=input.id??randomUUID();
   const existing=await assetRecord(id);
   if(existing?.storage_state==="ready") {
-    if(existing.kind!==input.kind || JSON.stringify(existing.metadata.inputs)!==JSON.stringify(input.inputs) || existing.metadata.model!==input.model || existing.metadata.prompt!==input.prompt)throw new WorkflowError("Saved stage provenance does not match this approved plan.",409);
+    if(existing.kind!==input.kind || !isDeepStrictEqual(existing.metadata.inputs,input.inputs) || existing.metadata.model!==input.model || existing.metadata.prompt!==input.prompt)throw new WorkflowError("Saved stage provenance does not match this approved plan.",409);
     return existing.metadata as unknown as {id:string;kind:typeof input.kind;inputs:Record<string,unknown>;prompt:string;model:string;seed?:number;createdAt:string};
   }
   const asset={id,kind:input.kind,inputs:input.inputs,prompt:input.prompt,model:input.model,...(input.seed===undefined?{}:{seed:input.seed}),createdAt:new Date().toISOString()};
-  await persistBytes({id,kind:input.kind,metadata:asset},await downloadImage(input.imageUrl,true));return asset;
+  const raw=await downloadImage(input.imageUrl,true);
+  const dimensions=imageMetadata(raw);
+  let bytes=raw;
+  if(input.kind==="generated_scene") {
+    const {normalizeScenePng}=await import("./creative/render");
+    bytes=await normalizeScenePng(raw);
+  } else if(dimensions.mime!=="image/png"||dimensions.width!==576||dimensions.height!==1024)throw new WorkflowError("Background must be a 576 × 1024 PNG.");
+  await persistBytes({id,kind:input.kind,metadata:asset},bytes);return asset;
 }
 export async function saveVisual(input:{imageUrl:string;prompt:string;model:string;seed?:number;inputs:VisualInputs}):Promise<VisualAsset> {
   const asset={id:randomUUID(),inputs:input.inputs,prompt:input.prompt,model:input.model,...(input.seed===undefined?{}:{seed:input.seed}),createdAt:new Date().toISOString()};

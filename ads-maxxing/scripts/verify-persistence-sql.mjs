@@ -37,6 +37,24 @@ assert.equal((await db.query('select generation_state from ad_versions where id=
 await assert.rejects(call('commit_campaign',[owner,campaign,stale.token,stale.revision,session,'loopycases.com',1]),/lease expired/);
 await call('release_campaign',[owner,campaign,stale.token]);
 await assert.rejects(call('claim_campaign',[owner,campaign]),/busy/);
+// Complete durable output and re-review/approval independently; current brief and historical variant share one row.
+const bg=randomUUID(),scene=randomUUID();
+for(const [id,kind] of [[bg,'generated_background'],[scene,'generated_scene'],[session.brief.id,'composed_ad']]) {
+ lease.revision=(await call('register_asset',[owner,campaign,lease.token,lease.revision,{...asset,id,kind,storage_path:`${owner}/${result.brand_id}/${id}/image.png`,metadata:kind==='composed_ad'?{versionId:id}:{}}])).revision;
+}
+session.brief.backgroundCheckpoint={...session.brief.backgroundCheckpoint,state:'saved',asset:{id:bg}};
+session.brief.sceneCheckpoint={state:'saved',asset:{id:scene}};
+const variant={id:session.brief.id,imageUrl:`/api/outputs/${session.brief.id}`,brief:structuredClone(session.brief),research:structuredClone(research),status:'pending_review'};
+session.variants=[variant];await save();
+variant.status='reviewed';variant.review={verdict:'pass'};await save();
+variant.status='approved';await save();
+assert.equal((await db.query('select generation_state,review_status from ad_versions where id=$1',[variant.id])).rows[0].review_status,'approved');
+const originalBrief=session.brief;
+session.brief={...originalBrief,id:randomUUID(),parentVariantId:variant.id,backgroundCheckpoint:undefined,sceneCheckpoint:undefined,executionPlan:{background:{action:'reuse',assetId:bg},scene:{action:'reuse',assetId:scene}}};
+await save();
+const reuse=(await db.query('select background_asset_id,scene_asset_id from ad_versions where id=$1',[session.brief.id])).rows[0];assert.equal(reuse.background_asset_id,bg);assert.equal(reuse.scene_asset_id,scene);
+delete session.brief;session.preferences={tone:'New direction'};session.research={...research,id:randomUUID()};await save();
+assert.ok((await db.query('select approved_at from ad_versions where id=$1',[variant.id])).rows[0].approved_at);
 // RLS and protected mutation privileges must work for the real authenticated role.
 await db.query("select set_config('request.jwt.claim.sub',$1,false)",[other]);await db.exec('set role authenticated');
 assert.equal((await db.query('select * from campaigns')).rows.length,0);

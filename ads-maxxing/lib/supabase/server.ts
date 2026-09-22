@@ -27,7 +27,9 @@ export async function supabase(path: string, init: RequestInit = {}, token?: str
   return response;
 }
 export async function rpc<T>(name: string, payload: object): Promise<T> {
-  return (await supabase(`/rest/v1/rpc/${name}`, { method: "POST", body: JSON.stringify(payload) })).json();
+  const response = await supabase(`/rest/v1/rpc/${name}`, { method: "POST", body: JSON.stringify(payload) });
+  const body = await response.text();
+  return (body ? JSON.parse(body) : undefined) as T;
 }
 export async function rows<T>(table: string, query: string): Promise<T[]> {
   return (await supabase(`/rest/v1/${table}?user_id=eq.${ownerContext().userId}&${query}`)).json();

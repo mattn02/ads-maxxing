@@ -134,6 +134,7 @@ begin
   if found then
    if prior.user_id<>p_owner or prior.campaign_id<>p_id or brief_content(prior.brief)<>brief_content(v) then raise exception 'WORKFLOW:Saved creative content is immutable. Create a new brief revision.'; end if;
   elsif parent is not null and not exists(select 1 from ad_versions where id=parent and campaign_id=p_id and user_id=p_owner and generation_state='complete') then raise exception 'WORKFLOW:Parent must be a completed version in this campaign.'; end if;
+  if v->>'logoSourceAssetId' is not null then perform assert_asset(p_owner,c.brand_id,p_id,(v->>'logoSourceAssetId')::uuid,'logo'); end if;
   if v->>'approvedAt' is not null and not (coalesce((v->>'legacyImported')::boolean,false) and exists(select 1 from assets where id=vid and user_id=p_owner and campaign_id=p_id and kind='composed_ad' and storage_state='ready')) then
    perform assert_asset(p_owner,c.brand_id,p_id,source,'product_photo');
    if prior.brief_approved_at is null and ((v->>'researchId')::uuid is distinct from rid or vid is distinct from (p_session#>>'{brief,id}')::uuid) then raise exception 'WORKFLOW:Only the current brief can be approved.'; end if;
@@ -161,6 +162,7 @@ begin
   generation_state_value:=case when final_id is not null then 'complete' when scene is not null then 'visual_ready'
     when v#>>'{sceneCheckpoint,state}'='output_pending_storage' or v#>>'{backgroundCheckpoint,state}'='output_pending_storage' then 'output_pending_storage'
     when v#>>'{sceneCheckpoint,state}'='attempted' or v#>>'{backgroundCheckpoint,state}'='attempted' or v->>'generationAttemptedAt' is not null then 'submitted' else 'not_started' end;
+  if prior.generation is not null and item->>'imageUrl' is not null and prior.generation-array['status','review','reviewError'] is distinct from item-array['brief','research','status','review','reviewError'] then raise exception 'WORKFLOW:Completed creative content is immutable.'; end if;
   if item->>'status'='approved' and item#>>'{review,verdict}' is distinct from 'pass' then raise exception 'WORKFLOW:Only a passing reviewed ad can be approved.'; end if;
   insert into ad_versions(id,user_id,campaign_id,research_snapshot_id,parent_version_id,reference_asset_id,background_asset_id,scene_asset_id,final_asset_id,brief,generation,brief_approved_at,approved_at,generation_state,review_status,generated_at)
    values(vid,p_owner,p_id,(v->>'researchId')::uuid,parent,source,bg,scene,final_id,v,case when item->>'imageUrl' is not null then item-array['brief','research'] else null end,(v->>'approvedAt')::timestamptz,case when item->>'status'='approved' then now() end,generation_state_value,item->>'status',case when final_id is not null then now() end)

@@ -3,6 +3,7 @@ import path from "node:path";
 import type { Research, Session, Variant } from "./session-types";
 import { WorkflowError } from "./validation";
 import { normalizeMessages } from "./messages";
+import { researchStateSchema } from "./research/contracts";
 import { ownerContext, rows, rpc } from "../supabase/server";
 
 /** Used only by the explicit legacy importer and developer fixtures. */
@@ -39,7 +40,7 @@ export async function loadSession(id: string): Promise<Session> {
   const snapshots = ids.length ? await rows<{ id: string; schema_version: number; data: unknown }>("research_snapshots", `id=in.(${ids.join(",")})&select=id,schema_version,data`) : [];
   const research = new Map(snapshots.map(row => [row.id, parseSnapshot(row.data, row.schema_version)]));
   ownerContext().brandId = campaign.brand_id ?? undefined;
-  return { id, createdAt: campaign.created_at, updatedAt: campaign.updated_at, messages: normalizeMessages(campaign.messages), preferences: campaign.preferences, events: campaign.events, ...(campaign.last_error ? { lastError: campaign.last_error } : {}), ...(campaign.workflow_state ? { researchState: campaign.workflow_state } : {}), research: research.get(campaign.current_research_id ?? ""), brief: versions.find(row => row.id === campaign.current_version_id)?.brief, variants: versions.filter(row => row.generation).map(row => ({ ...row.generation!, brief: row.brief!, research: research.get(row.research_snapshot_id)! })) };
+  return { id, createdAt: campaign.created_at, updatedAt: campaign.updated_at, messages: normalizeMessages(campaign.messages), preferences: campaign.preferences, events: campaign.events, ...(campaign.last_error ? { lastError: campaign.last_error } : {}), ...(campaign.workflow_state ? { researchState: researchStateSchema.parse(campaign.workflow_state) } : {}), research: research.get(campaign.current_research_id ?? ""), brief: versions.find(row => row.id === campaign.current_version_id)?.brief, variants: versions.filter(row => row.generation).map(row => ({ ...row.generation!, brief: row.brief!, research: research.get(row.research_snapshot_id)! })) };
 }
 export async function listSessions() {
   return (await rows<Pick<Campaign, "id" | "updated_at" | "name">>("campaigns", "status=eq.active&select=id,updated_at,name&order=updated_at.desc")).map(row => ({ id: row.id, updatedAt: row.updated_at, title: row.name }));
@@ -49,4 +50,13 @@ export async function lockSession(id: string) {
   const claim = await rpc<{ token: string; revision: number }>("claim_campaign", { p_owner: context.userId, p_id: sessionId(id) });
   context.lease = { campaignId: id, ...claim };
   return async () => { await rpc("release_campaign", { p_owner: context.userId, p_id: id, p_token: claim.token }); if (context.lease?.token === claim.token) delete context.lease; };
+}
+
+export async function loadBrandResearch(storeUrl:string):Promise<Research|null> {
+ const [brand]=await rows<{id:string;brand_kit:unknown}>("brands",`normalized_hostname=eq.${encodeURIComponent(normalizedHostname(storeUrl))}&select=id,brand_kit&limit=1`);
+ if(!brand)return null;
+ const [snapshot]=await rows<{schema_version:number;data:unknown}>("research_snapshots",`brand_id=eq.${brand.id}&select=schema_version,data&order=created_at.desc&limit=1`);
+ if(!snapshot)return null;
+ const research=parseSnapshot(snapshot.data,snapshot.schema_version);
+ return snapshot.schema_version===2?{...research,brandKit:brand.brand_kit} as Research:research;
 }
