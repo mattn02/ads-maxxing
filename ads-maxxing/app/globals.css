@@ -1,26 +1,22 @@
 @import "tailwindcss";
-
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+body { margin: 0; background: white; color: #222; font: 15px/1.5 Arial, sans-serif; }
+main { max-width: 850px; margin: 32px auto; padding: 0 20px 60px; }
+h1 { font-size: 24px; font-weight: 700; }
+h2 { font-size: 19px; font-weight: 700; margin: 24px 0 12px; }
+p { margin: 10px 0; }
+label { display: block; margin: 14px 0 6px; font-weight: 600; }
+input, textarea { width: 100%; border: 1px solid #999; padding: 8px; border-radius: 3px; }
+textarea { resize: vertical; }
+button { border: 1px solid #888; border-radius: 3px; padding: 7px 12px; background: #eee; cursor: pointer; margin: 8px 0; }
+button:disabled { opacity: .5; cursor: wait; }
+button[aria-pressed="true"] { outline: 3px solid #222; }
+.images { display: flex; gap: 10px; overflow-x: auto; padding: 5px; }
+.images button { flex: 0 0 100px; padding: 3px; }
+.images img { width: 100px; height: 100px; object-fit: contain; }
+.reference { height: 180px; max-width: 100%; object-fit: contain; margin: 12px 0; }
+.output { width: 288px; max-width: 100%; height: auto; }
+article { border-top: 1px solid #ccc; padding: 20px 0; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #f4f4f4; padding: 12px; max-height: 350px; overflow: auto; font-size: 12px; }
+summary { cursor: pointer; margin: 12px 0; }
+a { text-decoration: underline; }
+[role="alert"] { color: #a00; }

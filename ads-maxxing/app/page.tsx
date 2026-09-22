@@ -1,69 +1,73 @@
-import Image from "next/image";
+"use client";
+/* eslint-disable @next/next/no-img-element -- Plain previews for arbitrary scraped URLs in this local prototype. */
+import { useState } from "react";
+import type { Generation, Product } from "@/lib/workflow/types";
 
+async function post<T>(endpoint: string, body: unknown): Promise<T> {
+  const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Request failed.");
+  return data;
+}
 export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+  const [url, setUrl] = useState("https://www.loopycases.com");
+  const [product, setProduct] = useState<Product | null>(null);
+  const [referenceImage, setReferenceImage] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [outputs, setOutputs] = useState<Generation[]>([]);
+  const [busy, setBusy] = useState<"scraping" | "generating" | null>(null);
+  const [error, setError] = useState("");
+  async function scrape() {
+    setBusy("scraping"); setError(""); setProduct(null); setReferenceImage(""); setOutputs([]);
+    try {
+      const data = await post<{ product: Product; prompt: string }>("/api/scrape", { url });
+      setProduct(data.product); setPrompt(data.prompt); setReferenceImage(data.product.images[0] || "");
+    } catch (error) { setError(error instanceof Error ? error.message : "Scraping failed."); }
+    finally { setBusy(null); }
+  }
+  async function generate() {
+    if (!product) return;
+    setBusy("generating"); setError("");
+    try {
+      const output = await post<Generation>("/api/generate", { productUrl: product.url, referenceImage, prompt });
+      setOutputs((previous) => [output, ...previous]);
+    } catch (error) { setError(error instanceof Error ? error.message : "Generation failed."); }
+    finally { setBusy(null); }
+  }
+  return <main>
+    <h1>URL → product → image</h1>
+    <p>Local workflow test. Firecrawl scrape → fal image edit → local PNG.</p>
+    <form onSubmit={(event) => { event.preventDefault(); void scrape(); }}>
+      <label htmlFor="url">1. Product URL</label>
+      <input id="url" type="url" required value={url} onChange={(event) => setUrl(event.target.value)} disabled={!!busy} />
+      <p>A direct product page works best. A homepage may return banners and logos.</p>
+      <button disabled={!!busy}>Scrape URL</button>
+    </form>
+    <p role="status">{busy === "scraping" ? "Scraping with Firecrawl…" : busy === "generating" ? "Generating with fal and saving locally… this can take a few minutes." : "Ready."}</p>
+    {error && <p role="alert">{error}</p>}
+    {product && <section>
+      <h2>2. Inspect the scrape</h2>
+      <p><strong>{product.title}</strong></p><p>{product.description || "No description found."}</p>
+      <p>Choose the actual product photo before generating.</p>
+      {product.images.length ? <div className="images">{product.images.map((image, index) => <button type="button" key={image} disabled={!!busy} aria-pressed={referenceImage === image} onClick={() => setReferenceImage(image)} aria-label={`Select image ${index + 1}`}>
+        <img src={image} alt={`Scraped image ${index + 1}`} loading="lazy" />
+      </button>)}</div> : <p>No images found. Paste a public product image URL below, or try another page.</p>}
+      <label htmlFor="reference">Reference image URL</label>
+      <input id="reference" type="url" value={referenceImage} disabled={!!busy} onChange={(event) => setReferenceImage(event.target.value)} />
+      {referenceImage && <img className="reference" src={referenceImage} alt="Selected product reference" />}
+      <details><summary>Scraped text</summary><pre>{product.markdown || "No text returned."}</pre></details>
+      <h2>3. Generate an ad</h2>
+      <p>FLUX.2 klein 4B · one 576 × 1024 image · four steps.</p>
+      <label htmlFor="prompt">Prompt — edit this to steer the first or next generation</label>
+      <textarea id="prompt" rows={10} value={prompt} maxLength={8000} disabled={!!busy} onChange={(event) => setPrompt(event.target.value)} />
+      <button type="button" disabled={!!busy || !referenceImage || !prompt.trim()} onClick={() => void generate()}>{outputs.length ? "Generate another image" : "Generate image"}</button>
+    </section>}
+    {!!outputs.length && <section><h2>4. Output</h2><p>Saved in local-output/ as PNG + JSON. Check product fidelity and text; edit the prompt above to iterate.</p>
+      {outputs.map((output) => <article key={output.id}>
+        <img className="output" src={output.imageUrl} alt="Generated portrait product ad" />
+        <p><a href={output.imageUrl} download={`${output.id}.png`}>Download PNG</a></p>
+        <details><summary>Generation inputs</summary><pre>{JSON.stringify(output, null, 2)}</pre></details>
+      </article>)}
+    </section>}
+  </main>;
 }
