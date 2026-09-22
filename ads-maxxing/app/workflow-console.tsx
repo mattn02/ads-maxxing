@@ -1,130 +1,389 @@
 "use client";
-/* eslint-disable @next/next/no-img-element -- Local PoC previews use arbitrary store image URLs. */
-import { useState } from "react";
+import Link from "next/link";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import type { ConciergeMessage } from "@/lib/workflow/agents/concierge";
-import type { Brief, Session } from "@/lib/workflow/session-types";
-
-async function request<T>(url: string, body?: unknown): Promise<T> {
-  const response = await fetch(url, body === undefined ? { cache: "no-store" } : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error || "Request failed.");
-  return result;
-}
-export function WorkflowConsole({ initialSessions }: { initialSessions: { id: string; title: string }[] }) {
+import type { Session, Variant } from "@/lib/workflow/session-types";
+import {
+  workspaceApi,
+  storeName,
+  type CampaignSummary,
+  type WorkflowAction,
+} from "@/lib/workspace/api";
+import { Button } from "@/components/workspace/ui";
+import {
+  AssetsView,
+  BrandView,
+  Onboarding,
+  ResearchView,
+} from "@/components/workspace/research";
+import { AdsView, BriefEditor, CampaignForm } from "@/components/workspace/ads";
+import { ChatPanel } from "@/components/workspace/chat";
+type Section = "Ads" | "Assets" | "Brand";
+export function WorkflowConsole({
+  initialSessions,
+  initialSession = null,
+}: {
+  initialSessions: CampaignSummary[];
+  initialSession?: Session | null;
+}) {
+  const [session, setSession] = useState(initialSession);
   const [sessions, setSessions] = useState(initialSessions);
-  const [session, setSession] = useState<Session | null>(null);
+  const [opening, setOpening] = useState(false);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  async function open(id?: string) {
-    setBusy(true); setError("");
+  const [firstMessage, setFirstMessage] = useState("");
+  async function open(id?: string, text = "") {
+    setOpening(true);
+    setError("");
     try {
-      setSession(await request<Session>(id ? `/api/sessions/${id}` : "/api/sessions", id ? undefined : {}));
-      setSessions(await request("/api/sessions"));
-    } catch (error) { setError((error as Error).message); }
-    finally { setBusy(false); }
+      const next = id
+        ? await workspaceApi.open(id)
+        : await workspaceApi.create();
+      setFirstMessage(text);
+      setSession(next);
+      setSessions(await workspaceApi.list());
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setOpening(false);
+    }
   }
-  return <main>
-    <h1>Agent workflow PoC</h1>
-    <p>Concierge → research → approve brief → artist → reviewer. Local files, one image per approved revision.</p>
-    <button disabled={busy} onClick={() => void open()}>New session</button>{" "}
-    <select aria-label="Resume session" disabled={busy} value={session?.id || ""} onChange={event => void open(event.target.value)}>
-      <option value="" disabled>Resume a saved session</option>
-      {sessions.map(item => <option key={item.id} value={item.id}>{item.title} · {item.id.slice(0, 8)}</option>)}
-    </select>
-    {error && <p role="alert">{error}</p>}
-    {session ? <Chat key={session.id} initial={session} /> : <p>Start a session and ask: “Research https://www.loopycases.com and draft an ad.” Include a product or campaign URL to narrow the research.</p>}
-  </main>;
+  return (
+    <Workbench
+      key={session?.id || "setup"}
+      initial={session}
+      sessions={sessions}
+      open={open}
+      opening={opening}
+      loadError={error}
+      firstMessage={firstMessage}
+    />
+  );
 }
-function Chat({ initial }: { initial: Session }) {
+function Workbench({
+  initial,
+  sessions,
+  open,
+  opening,
+  loadError,
+  firstMessage,
+}: {
+  initial: Session | null;
+  sessions: CampaignSummary[];
+  open: (id?: string, text?: string) => Promise<void>;
+  opening: boolean;
+  loadError: string;
+  firstMessage: string;
+}) {
   const [session, setSession] = useState(initial);
+  const [section, setSection] = useState<Section>("Ads");
+  const [view, setView] = useState<
+    "overview" | "brief" | "campaign" | "research"
+  >("overview");
+  const [selected, setSelected] = useState<string | null>(null);
   const [input, setInput] = useState("");
+  const [attachment, setAttachment] = useState<{
+    id: string;
+    headline: string;
+  } | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState("");
+  const [chatOpen, setChatOpen] = useState(true);
+  const [mobileChat, setMobileChat] = useState(false);
+  const [chatWidth, setChatWidth] = useState(380);
+  const sent = useRef(false);
   async function refresh() {
-    try { setSession(await request<Session>(`/api/sessions/${initial.id}`)); }
-    catch (error) { setActionError((error as Error).message); }
+    if (!initial) return;
+    try {
+      setSession(await workspaceApi.open(initial.id));
+    } catch (e) {
+      setActionError((e as Error).message);
+    }
   }
   const { messages, sendMessage, status, error } = useChat<ConciergeMessage>({
-    id: initial.id, messages: initial.messages as ConciergeMessage[],
+    id: initial?.id || "setup",
+    messages: (initial?.messages as ConciergeMessage[]) || [],
     transport: new DefaultChatTransport({
       api: "/api/chat",
-      prepareSendMessagesRequest: ({ id, messages }) => ({ body: { id, message: messages[messages.length - 1] } }),
+      prepareSendMessagesRequest: ({ id, messages }) => ({
+        body: { id, message: messages[messages.length - 1] },
+      }),
     }),
-    onFinish: () => { void refresh(); },
-    onError: () => { void refresh(); },
+    onFinish: () => {
+      void refresh();
+    },
+    onError: () => {
+      void refresh();
+    },
   });
-  const busy = actionBusy || status === "submitted" || status === "streaming";
-  async function action(body: unknown) {
-    setActionBusy(true); setActionError("");
-    try { setSession(await request<Session>(`/api/sessions/${initial.id}`, body)); }
-    catch (error) { setActionError((error as Error).message); await refresh(); }
-    finally { setActionBusy(false); }
+  useEffect(() => {
+    if (initial && firstMessage && !sent.current) {
+      sent.current = true;
+      void sendMessage({ text: firstMessage });
+    }
+  }, [initial, firstMessage, sendMessage]);
+  const busy =
+    opening || actionBusy || status === "submitted" || status === "streaming";
+  async function action(body: WorkflowAction) {
+    if (!session) return false;
+    setActionBusy(true);
+    setActionError("");
+    try {
+      setSession(await workspaceApi.action(session.id, body));
+      return true;
+    } catch (e) {
+      setActionError((e as Error).message);
+      await refresh();
+      return false;
+    } finally {
+      setActionBusy(false);
+    }
   }
-  return <>
-    <section aria-label="Chat">
-      {messages.map(message => <article key={message.id}>
-        <strong>{message.role === "user" ? "You" : "Concierge"}</strong>
-        {message.parts.map((part, index) => part.type === "text" ? <p key={index} style={{ whiteSpace: "pre-wrap" }}>{part.text}</p> : part.type.startsWith("tool-") ? <details key={index}><summary>{part.type.slice(5)} · {"state" in part ? String(part.state) : ""}</summary><pre>{JSON.stringify(part, null, 2)}</pre></details> : null)}
-      </article>)}
-      <form onSubmit={event => { event.preventDefault(); if (input.trim()) { void sendMessage({ text: input }); setInput(""); } }}>
-        <label htmlFor="chat">Message or feedback</label>
-        <textarea id="chat" rows={3} maxLength={8000} disabled={busy} value={input} onChange={event => setInput(event.target.value)} placeholder="Research https://www.loopycases.com and draft an ad." />
-        <button disabled={busy || !input.trim()}>Send</button>
-      </form>
-      <p role="status">{busy ? "Working… research and image generation can take a few minutes." : "Ready"}</p>
-      {(error || actionError || session.lastError) && <p role="alert">{actionError || error?.message || session.lastError}</p>}
-    </section>
-    {session.research && <section>
-      <h2>Research</h2>
-      <p>Voice (inferred): {session.research.voice}</p>
-      <p>Audience (inferred): {session.research.audience}</p>
-      <p>Colors: {session.research.colors.map(color => color.value).join(", ") || "Unknown"}</p>
-      <p>Sales: {session.research.sales.length ? "Source quotes below; confirm applicability before using." : "None supported by source evidence."}</p>
-      {session.research.sales.map(sale => <p key={sale.id}>“{sale.quote}” — <a href={sale.sourceUrl} target="_blank" rel="noreferrer">source</a></p>)}
-      {session.research.warnings.map(warning => <p key={warning}>{warning}</p>)}
-      <details><summary>Saved research and source text</summary><pre>{JSON.stringify(session.research, null, 2)}</pre></details>
-    </section>}
-    {session.brief && <BriefEditor key={session.brief.id} brief={session.brief} session={session} busy={busy} action={action} generate={() => { void action({ action: "generateAd", briefId: session.brief!.id }); }} />}
-    {!!session.variants.length && <section><h2>Variants</h2>
-      {[...session.variants].reverse().map(variant => <article key={variant.id}>
-        <p><strong>{variant.status}</strong> · {variant.id.slice(0, 8)}</p>
-        <img className="output" src={variant.imageUrl} alt={variant.brief.headline} />
-        <p><a href={variant.imageUrl} download={`${variant.id}.png`}>Download PNG</a></p>
-        <p>{variant.review?.visual.summary || variant.reviewError || "Waiting for review"}</p>
-        {variant.review && <pre>{JSON.stringify(variant.review, null, 2)}</pre>}
-        <button disabled={busy || variant.status !== "review_failed"} onClick={() => void action({ action: "reviewAd", variantId: variant.id })}>Retry failed review</button>{" "}
-        <button disabled={busy || variant.status !== "reviewed"} onClick={() => void action({ action: "approveAd", variantId: variant.id })}>Approve ad</button>{" "}
-        <button disabled={busy} onClick={() => setInput(`Revise variant ${variant.id}: `)}>Give feedback</button>
-        <details><summary>Saved generation inputs</summary><pre>{JSON.stringify({ brief: variant.brief, model: variant.model, prompt: variant.prompt }, null, 2)}</pre></details>
-      </article>)}
-    </section>}
-    <details><summary>Preferences and workflow events</summary><pre>{JSON.stringify({ preferences: session.preferences, events: session.events }, null, 2)}</pre></details>
-    <button disabled={busy} onClick={() => void refresh()}>Refresh saved state</button>
-  </>;
-}
-function BriefEditor({ brief, session, busy, action, generate }: { brief: Brief; session: Session; busy: boolean; action: (body: unknown) => Promise<void>; generate: () => void }) {
-  const [draft, setDraft] = useState(brief);
-  const [dirty, setDirty] = useState(false);
-  function update(values: Partial<Brief>) { setDraft({ ...draft, ...values }); setDirty(true); }
-  return <section>
-    <h2>Brief · {brief.approvedAt ? "approved" : "awaiting your approval"}</h2>
-    <p>Confirm the photo is the exact product being advertised. Editing creates a new revision that needs approval.</p>
-    <div className="images">{session.research?.sources.flatMap(source => source.images.map(image => <button key={`${source.url}:${image}`} disabled={busy} aria-pressed={draft.referenceImage === image} onClick={() => update({ referenceImage: image, productUrl: source.url })}>
-      <img src={image} alt={`Select photo from ${source.title}`} loading="lazy" />
-    </button>))}</div>
-    <img className="reference" src={draft.referenceImage} alt="Selected source product" />
-    <label htmlFor="headline">Headline</label><input id="headline" disabled={busy} maxLength={120} value={draft.headline} onChange={event => update({ headline: event.target.value })} />
-    <label htmlFor="cta">Call to action</label><input id="cta" disabled={busy} maxLength={50} value={draft.cta} onChange={event => update({ cta: event.target.value })} />
-    <label htmlFor="direction">Art direction</label><textarea id="direction" disabled={busy} maxLength={2000} value={draft.direction} onChange={event => update({ direction: event.target.value })} />
-    <label htmlFor="sale">Offer</label><select id="sale" disabled={busy} value={draft.saleId || ""} onChange={event => update({ saleId: event.target.value || null })}>
-      <option value="">No offer</option>{session.research?.sales.map(sale => <option key={sale.id} value={sale.id}>{sale.description}</option>)}
-    </select>
-    <p>Feedback: {brief.feedback || "First draft"}</p>
-    <button disabled={busy || !dirty} onClick={() => void action({ action: "reviseBrief", brief: draft })}>Save revised brief</button>{" "}
-    <button disabled={busy || dirty || !!brief.approvedAt || !!brief.generationAttemptedAt} onClick={() => void action({ action: "approveBrief", briefId: brief.id })}>Approve brief and photo</button>{" "}
-    <button disabled={busy || dirty || !brief.approvedAt || !!brief.generationAttemptedAt} onClick={generate}>Generate approved brief</button>
-    {brief.generationAttemptedAt && <p>This revision has already attempted generation. Give feedback or save an edited brief to create another.</p>}
-  </section>;
+  function send(text: string) {
+    if (busy) return;
+    if (!session) {
+      void open(undefined, text);
+      return;
+    }
+    const prompt = attachment
+      ? `Feedback on variant ${attachment.id} (${attachment.headline}): ${text}. Prepare a new brief linked to this parent variant; preserve the original ad.`
+      : text;
+    setInput("");
+    setAttachment(null);
+    setActionError("");
+    void sendMessage({ text: prompt });
+  }
+  function feedback(variant: Variant) {
+    setAttachment({ id: variant.id, headline: variant.brief.headline });
+    setChatOpen(true);
+    setMobileChat(true);
+  }
+  function openBrief() {
+    setSection("Ads");
+    setView("brief");
+    setMobileChat(false);
+  }
+  const name = storeName(session);
+  const showBrief =
+    session?.brief &&
+    (view === "brief" || (view === "overview" && !session.variants.length));
+  return (
+    <div
+      className={`workspace ${chatOpen ? "" : "chat-closed"} ${mobileChat ? "show-chat" : ""}`}
+      style={{ "--chat-width": `${chatWidth}px` } as CSSProperties}
+    >
+      <aside className="sidebar">
+        <Link className="wordmark" href="/" aria-label="Studio home">
+          <span>◈</span> studio<span className="wordmark-dot">.</span>
+        </Link>
+        <div className="brand-identity">
+          <span className="brand-avatar">
+            {name === "Your brand" ? "◇" : name[0].toUpperCase()}
+          </span>
+          <div>
+            <strong>{name}</strong>
+            <span>Creative workspace</span>
+          </div>
+        </div>
+        <p className="nav-label">WORKSPACE</p>
+        <nav aria-label="Workspace">
+          {(["Ads", "Assets", "Brand"] as Section[]).map((s, i) => (
+            <button
+              key={s}
+              className={`nav-item ${section === s ? "selected" : ""}`}
+              aria-current={section === s ? "page" : undefined}
+              onClick={() => {
+                setSection(s);
+                setView("overview");
+                setMobileChat(false);
+              }}
+            >
+              <span aria-hidden="true">{["▦", "▧", "◈"][i]}</span>
+              {s}
+              {s === "Ads" && !!session?.variants.length && (
+                <small>{session.variants.length}</small>
+              )}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-bottom">
+          <div className="local-note">
+            <span className="status-dot" /> Local workspace
+            <p>Your progress is saved on this device’s server.</p>
+          </div>
+          <div className="user-profile">
+            <span>D</span>
+            <div>
+              <strong>Demo workspace</strong>
+              <small>Let’s make something good.</small>
+            </div>
+          </div>
+        </div>
+      </aside>
+      <div className="workspace-main">
+        <header className="topbar">
+          <div className="breadcrumb">
+            Workspace <span>/</span> <strong>{section}</strong>
+          </div>
+          <div className="topbar-actions">
+            <Button
+              className="mobile-switch"
+              onClick={() => {
+                setMobileChat(!mobileChat);
+                setChatOpen(true);
+              }}
+            >
+              {mobileChat ? "Workspace" : "Chat"}
+            </Button>
+            <Button
+              className="desktop-chat-toggle"
+              aria-expanded={chatOpen}
+              onClick={() => setChatOpen(!chatOpen)}
+            >
+              {chatOpen ? "Hide chat" : "Show chat"} ☷
+            </Button>
+          </div>
+        </header>
+        <div className="campaign-bar">
+          <label className="sr-only" htmlFor="campaign-select">
+            Saved campaign
+          </label>
+          <select
+            id="campaign-select"
+            disabled={busy}
+            value={session?.id || ""}
+            onChange={(e) => void open(e.target.value)}
+          >
+            <option value="" disabled>
+              Brand setup
+            </option>
+            {sessions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.id === session?.id
+                  ? session.preferences.campaignName || s.title
+                  : s.title}
+              </option>
+            ))}
+          </select>
+          <Button disabled={busy} onClick={() => void open()}>
+            + New workspace
+          </Button>
+        </div>
+        <main className="main-scroll">
+          {loadError && (
+            <div role="alert" className="error-box">
+              {loadError}
+            </div>
+          )}
+          {actionError && (
+            <div role="alert" className="error-box">
+              {actionError}
+            </div>
+          )}
+          {section === "Assets" ? (
+            <AssetsView session={session} />
+          ) : section === "Brand" ? (
+            <BrandView session={session} />
+          ) : !session?.research ? (
+            <Onboarding busy={busy} submit={send} />
+          ) : view === "campaign" ? (
+            <CampaignForm
+              session={session}
+              busy={busy}
+              send={send}
+              cancel={() => setView("overview")}
+            />
+          ) : showBrief ? (
+            <>
+              <Button onClick={() => setView("research")}>
+                ← Research findings
+              </Button>
+              <BriefEditor
+                key={session.brief!.id}
+                session={session}
+                busy={busy}
+                action={action}
+              />
+            </>
+          ) : view === "research" || !session.variants.length ? (
+            <ResearchView
+              session={session}
+              busy={busy}
+              send={send}
+              create={() => setView("campaign")}
+            />
+          ) : (
+            <>
+              <div className="actions view-links">
+                <Button onClick={() => setView("research")}>
+                  Research findings
+                </Button>
+                {session.brief && (
+                  <Button onClick={openBrief}>Current brief</Button>
+                )}
+              </div>
+              <AdsView
+                session={session}
+                selected={selected}
+                select={setSelected}
+                feedback={feedback}
+                create={() => setView("campaign")}
+                busy={busy}
+                action={action}
+              />
+            </>
+          )}
+        </main>
+      </div>
+      <aside className="chat-panel" aria-label="Creative partner">
+        <div
+          className="resize-handle"
+          role="separator"
+          aria-label="Resize chat panel"
+          aria-orientation="vertical"
+          aria-valuemin={320}
+          aria-valuemax={520}
+          aria-valuenow={chatWidth}
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+              e.preventDefault();
+              setChatWidth((w) =>
+                Math.max(
+                  320,
+                  Math.min(520, w + (e.key === "ArrowLeft" ? 20 : -20)),
+                ),
+              );
+            }
+          }}
+          onPointerDown={(e) => {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }}
+          onPointerMove={(e) => {
+            if (e.currentTarget.hasPointerCapture(e.pointerId))
+              setChatWidth(
+                Math.max(320, Math.min(520, window.innerWidth - e.clientX)),
+              );
+          }}
+          onPointerUp={(e) =>
+            e.currentTarget.releasePointerCapture(e.pointerId)
+          }
+        />
+        <ChatPanel
+          session={session}
+          messages={messages}
+          input={input}
+          setInput={setInput}
+          send={send}
+          busy={busy}
+          error={actionError || error?.message || session?.lastError}
+          attachment={attachment}
+          detach={() => setAttachment(null)}
+          openBrief={openBrief}
+          refresh={() => void refresh()}
+        />
+      </aside>
+    </div>
+  );
 }
