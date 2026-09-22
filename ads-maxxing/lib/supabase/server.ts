@@ -37,11 +37,28 @@ export async function rows<T>(table: string, query: string): Promise<T[]> {
 function cookie(request: Request, name: string) {
   return request.headers.get("cookie")?.split(";").map(value => value.trim()).find(value => value.startsWith(`${name}=`))?.slice(name.length + 1);
 }
+/** Next may construct request.url with its internal listening hostname.
+ * Match the browser authority against Host; never let x-forwarded-host override it.
+ * Deployment proxies must preserve Host and supply a single forwarded protocol.
+ */
+function sameOrigin(request: Request, origin: string): boolean {
+  try {
+    if (!/^https?:\/\/[^/?#\\]+$/i.test(origin)) return false;
+    const supplied = new URL(origin);
+    if (supplied.username || supplied.password) return false;
+    const internal = new URL(request.url);
+    const host = request.headers.get("host") ?? internal.host;
+    if (!/^(?:[a-z0-9.-]+|\[[a-f0-9:.]+\])(?::[0-9]+)?$/i.test(host)) return false;
+    const protocol = request.headers.get("x-forwarded-proto") ?? internal.protocol.slice(0, -1);
+    if (protocol !== "http" && protocol !== "https") return false;
+    return supplied.origin === new URL(`${protocol}://${host}`).origin;
+  } catch { return false; }
+}
 /** Verify every caller with Auth. The user ID never comes from a request body or JWT decoding. */
 export async function authenticated(request: Request, work: () => Promise<Response>, allowNew = false): Promise<Response> {
   try {
     const origin = request.headers.get("origin");
-    if (request.method !== "GET" && origin && origin !== new URL(request.url).origin) throw new WorkflowError("Cross-origin mutation rejected.", 403);
+    if (request.method !== "GET" && origin && !sameOrigin(request, origin)) throw new WorkflowError("Cross-origin mutation rejected.", 403);
     const config = configuration();
     let access = cookie(request, "creative-access");
     const refresh = cookie(request, "creative-refresh");
