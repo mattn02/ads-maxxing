@@ -1,3 +1,5 @@
+import { authenticated } from "@/lib/supabase/server";
+import { publicSession } from "@/lib/workflow/public-session";
 import { z } from "zod";
 import { briefSchema } from "@/lib/workflow/schema";
 import { Workflow } from "@/lib/workflow/service";
@@ -14,14 +16,14 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("reviewAd"), variantId: z.string() }),
 ]);
 export async function GET(_request: Request, { params }: Context) {
-  try { return Response.json(await loadSession((await params).id), { headers: { "Cache-Control": "no-store" } }); }
-  catch (error) { return apiError(error); }
+  return authenticated(_request, async () => Response.json(publicSession(await loadSession((await params).id))));
 }
 export async function POST(request: Request, { params }: Context) {
-  let release: (() => void) | undefined;
+  return authenticated(request, async () => {
+  let release: (() => Promise<void>) | undefined;
   try {
     const { id } = await params;
-    release = lockSession(id);
+    release = await lockSession(id);
     const parsed = actionSchema.safeParse(await request.json());
     if (!parsed.success) throw new WorkflowError("Invalid workflow action or brief.");
     const workflow = new Workflow(await loadSession(id));
@@ -33,7 +35,8 @@ export async function POST(request: Request, { params }: Context) {
       case "approveAd": await workflow.approveVariant(action.variantId); break;
       case "reviewAd": await workflow.review(action.variantId); break;
     }
-    return Response.json(workflow.session);
+    return Response.json(publicSession(workflow.session));
   } catch (error) { return apiError(error); }
-  finally { release?.(); }
+  finally { await release?.(); }
+  });
 }

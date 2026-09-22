@@ -1,9 +1,9 @@
 import { createSession, listSessions } from "@/lib/workflow/sessions";
-import { apiError } from "@/lib/workflow/validation";
+import { authenticated } from "@/lib/supabase/server";
 export const runtime = "nodejs";
-export async function GET() {
-  try { return Response.json(await listSessions()); } catch (error) { return apiError(error); }
+export async function GET(request: Request) {
+ return authenticated(request, async () => Response.json(await listSessions()), true);
 }
-export async function POST() {
-  try { return Response.json(await createSession(), { status: 201 }); } catch (error) { return apiError(error); }
+export async function POST(request: Request) {
+ return authenticated(request, async () => Response.json(await createSession(), { status: 201 }), true);
 }

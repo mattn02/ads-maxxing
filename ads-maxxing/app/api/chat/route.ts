@@ -1,3 +1,4 @@
+import { authenticated, persistenceContext, ownerContext } from "@/lib/supabase/server";
 import { randomUUID } from "node:crypto";
 import { createAgentUIStreamResponse } from "ai";
 import { z } from "zod";
@@ -13,12 +14,13 @@ const requestSchema = z.object({
   message: z.object({ id: z.string().min(1).max(100), role: z.literal("user"), parts: z.array(z.object({ type: z.literal("text"), text: z.string().trim().min(1).max(8000) })).min(1).max(1) }),
 });
 export async function POST(request: Request) {
-  let release: (() => void) | undefined;
+  return authenticated(request, async () => {
+  let release: (() => Promise<void>) | undefined;
   try {
     const parsed = requestSchema.safeParse(await request.json());
     if (!parsed.success) throw new WorkflowError("Send a session ID and a text-only user message.");
     const { id, message } = parsed.data;
-    release = lockSession(id);
+    release = await lockSession(id);
     const session = await loadSession(id);
     // The server owns history. Clients cannot inject assistant messages or approval state.
     if (session.messages.some(item => item.id === message.id)) throw new WorkflowError("This message was already submitted. Reload the session before trying again.", 409);
@@ -30,6 +32,7 @@ export async function POST(request: Request) {
     const history = session.messages.slice(-12);
     const earlier = session.messages.slice(0, -history.length);
     const unlock = release;
+    const context = ownerContext();
     return await createAgentUIStreamResponse({
       agent, uiMessages: history, timeout: 300000, generateMessageId: randomUUID, sendReasoning: false,
       experimental_transform: conciergeText(agent.responseText),
@@ -40,17 +43,18 @@ export async function POST(request: Request) {
         session.events.push({ at: new Date().toISOString(), action: "chat", status: "failed", detail });
         return detail;
       },
-      onEnd: async ({ messages }) => {
+      onEnd: async ({ messages }) => persistenceContext.run(context, async () => {
         await agent.waitForTools();
         session.messages = [...earlier, ...messages];
         await saveSession(session);
-      },
+      }),
       // Finish saving even if a browser disconnects; never start another paid request.
       consumeSseStream: async ({ stream }) => {
         const reader = stream.getReader();
         try { while (!(await reader.read()).done) { /* consume to completion */ } }
-        finally { reader.releaseLock(); unlock(); }
+        finally { reader.releaseLock(); await unlock(); }
       },
     });
-  } catch (error) { release?.(); return apiError(error); }
+  } catch (error) { await release?.(); return apiError(error); }
+  });
 }

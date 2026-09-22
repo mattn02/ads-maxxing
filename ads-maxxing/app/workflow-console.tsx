@@ -30,9 +30,21 @@ export function WorkflowConsole({
 }) {
   const [session, setSession] = useState(initialSession);
   const [sessions, setSessions] = useState(initialSessions);
-  const [opening, setOpening] = useState(false);
+  const [opening, setOpening] = useState(!initialSession);
   const [error, setError] = useState("");
   const [firstMessage, setFirstMessage] = useState("");
+  const boot = useRef<Promise<void> | null>(null);
+  useEffect(() => {
+    if (initialSession || boot.current) return;
+    boot.current = (async () => {
+      try {
+        const saved = await workspaceApi.list();
+        setSessions(saved);
+        if (saved[0]) setSession(await workspaceApi.open(saved[0].id));
+      } catch (e) { setError((e as Error).message); }
+      finally { setOpening(false); }
+    })();
+  }, [initialSession]);
   async function open(id?: string, text = "") {
     setOpening(true);
     setError("");
