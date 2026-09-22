@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { briefSchema, researchInputSchema, type BriefInput, type ResearchInput } from "./schema";
 import type { Brief, Research, Session, Variant } from "./session-types";
-import { saveSession } from "./sessions";
+import { loadBrandResearch, saveSession } from "./sessions";
 import { safeError, WorkflowError } from "./validation";
 import { research } from "./agents/researcher";
 import { createAd } from "./agents/artist";
@@ -18,7 +18,7 @@ import { planExecution, validatePlan, matchesStage } from "./creative/reuse";
 import { readVisual, readAsset, pinSourceAsset } from "./storage";
 
 export type WorkflowDependencies = { loadBrandResearch?: (storeUrl: string) => Promise<Research | null>; research: typeof research; createAd: typeof createAd; reviewAd: typeof reviewAd; save: typeof saveSession; readVisual: typeof readVisual; readAsset?: typeof readAsset; pinSourceAsset?: typeof pinSourceAsset };
-const defaults: WorkflowDependencies = { research, createAd, reviewAd, save: saveSession, readVisual, readAsset, pinSourceAsset };
+const defaults: WorkflowDependencies = { loadBrandResearch, research, createAd, reviewAd, save: saveSession, readVisual, readAsset, pinSourceAsset };
 
 /** Workflow rules live here, independently of the LLM, HTTP routes and UI. */
 export class Workflow {
