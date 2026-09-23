@@ -139,8 +139,9 @@ test("review failure retains image; retrying review never regenerates", async ()
   await workflow.review(output.id);
   assert.equal(output.status, "reviewed");
   assert.equal(generationCount(), 1);
-  await workflow.approveVariant(output.id);
-  assert.equal(output.status, "approved");
+  await assert.rejects(workflow.approveVariant(output.id), /Resolve the review findings/);
+  assert.equal(output.status, "reviewed");
+  assert.equal(output.acceptance, undefined);
 });
 
 test("failed generation is marked before calling fal and cannot automatically retry", async () => {

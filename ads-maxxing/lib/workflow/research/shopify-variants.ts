@@ -32,7 +32,7 @@ export function shopifyVariants(product: Json) {
     const declared = [variant.featured_image, object(variant.featured_media).preview_image,
       ...images.filter(image => string(object(image).id) === string(variant.image_id) && !!variant.image_id),
       ...images.filter(image => list(object(image).variant_ids).some(id => string(id) === storeId))];
-    return [{ storeId, title: string(variant.title), attributes, images: [...new Set(declared.map(imageUrl).filter(Boolean))] }];
+    return [{ storeId, title: string(variant.title), attributes, price: variant.price, compare_at_price: variant.compare_at_price, available: variant.available, images: [...new Set(declared.map(imageUrl).filter(Boolean))] }];
   });
 }
 

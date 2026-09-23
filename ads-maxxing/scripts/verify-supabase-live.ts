@@ -37,9 +37,11 @@ await persistenceContext.run({userId:first.id},async()=>{
   await saveComposedGeneration(generation,png);
   const variant={...generation,brief:structuredClone(brief),research:structuredClone(research),status:'pending_review'} as Variant;
   session.variants.push(variant);await saveSession(session);assert.deepEqual(await readImage(variant.id),png);
-  variant.review={verdict:'pass',checks:[],visual:{productFidelity:{status:'pass',reason:'Fixture'},textLegibility:{status:'pass',reason:'Fixture'},claimAccuracy:{status:'pass',reason:'Fixture'},brandFit:{status:'pass',reason:'Fixture'},summary:'Synthetic persistence fixture'},createdAt:new Date().toISOString()};variant.status='reviewed';await saveSession(session);variant.status='approved';await saveSession(session);
+  // Synthetic review tests persistence only; this is not a provider quality check.
+  variant.review={verdict:'pass',checks:[{name:'durable_fixture_bytes',passed:png.equals((await readImage(variant.id))!),detail:'Stored synthetic image matches the uploaded fixture.'}],visual:{productFidelity:{status:'pass',reason:'Fixture'},textLegibility:{status:'pass',reason:'Fixture'},claimAccuracy:{status:'pass',reason:'Fixture'},brandFit:{status:'pass',reason:'Fixture'},summary:'Synthetic persistence fixture'},createdAt:new Date().toISOString()};variant.status='reviewed';await saveSession(session);
+  variant.acceptance={acceptedAt:new Date().toISOString(),reviewedAt:variant.review.createdAt};variant.status='approved';await saveSession(session);
   delete session.brief;session.preferences={tone:'Changed'};session.research={...research,id:randomUUID()};await saveSession(session);
-  const loaded=await loadSession(session.id);assert.equal(loaded.variants[0].status,'approved');assert.equal(loaded.variants[0].research.id,research.id);assert.equal((await listSessions()).length,1);
+  const loaded=await loadSession(session.id);assert.equal(loaded.variants[0].status,'approved');assert.deepEqual(loaded.variants[0].acceptance,variant.acceptance);assert.equal(loaded.variants[0].research.id,research.id);assert.equal((await listSessions()).length,1);
  }finally{await release();}
 });
 await persistenceContext.run({userId:second.id},async()=>{

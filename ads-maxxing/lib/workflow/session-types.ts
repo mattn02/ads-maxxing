@@ -9,7 +9,7 @@ export type Source = Product & {
   requestedUrl?: string;
   finalUrl?: string;
   rawHtml?: string;
-  shopify?: { url: string; fetchedAt: string; product: Record<string, unknown> };
+  shopify?: { url: string; fetchedAt: string; product: Record<string, unknown>; currency?: { code: string; sourceUrl: string; fetchedAt: string } };
   links?: string[];
   branding?: Record<string, unknown>;
   pageType?: "home" | "product" | "collection" | "company" | "unknown";

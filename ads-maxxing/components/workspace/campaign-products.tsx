@@ -7,15 +7,12 @@ import {
 } from "@/lib/workflow/research/scope";
 import { Badge, Button } from "./ui";
 import { WorkspaceIcon } from "./workspace-icon";
+import { formatProductPrice, selectedProductPrice } from "@/lib/workflow/research/prices";
 
 
 function formatPrice(price: NonNullable<NonNullable<Research["products"]>[number]["price"]>) {
   try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: price.currency,
-      currencyDisplay: "symbol",
-    }).format(price.amount);
+    return formatProductPrice(price);
   } catch {
     return `${price.currency} ${price.amount}`;
   }
@@ -73,7 +70,8 @@ export function CampaignProducts({ research, busy, plan }: {
             ? product.variants.find((variant) => variant.id === member.variantId)
             : undefined;
           const optionCount = members.filter((item) => item.variantId).length;
-          const availability = availabilityLabel(product.price?.availability ?? null);
+          const price = selectedProductPrice(product, member.variantId);
+          const availability = availabilityLabel(price?.availability ?? null);
 
           return (
             <article className="campaign-product-card" key={product.id}>
@@ -90,7 +88,7 @@ export function CampaignProducts({ research, busy, plan }: {
               </div>
               <div className="campaign-product-content">
                 <div className="campaign-product-meta">
-                  {product.price ? <strong>{formatPrice(product.price)}</strong> : <span>Price not found</span>}
+                  {price ? <strong>{formatPrice(price)}</strong> : <span>Price not found</span>}
                   {availability && <span>{availability}</span>}
                 </div>
                 <h3>{product.title}</h3>

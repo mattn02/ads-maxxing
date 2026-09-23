@@ -4,6 +4,7 @@ import { adCopySchema } from "../schema";
 import { brandTokensSchema, creativeFontFamily, designSchema, type BrandTokens } from "./schema";
 import { emojiImages, graphemes, textRuns } from "./emoji";
 import { loadCreativeFont } from "./fonts";
+import { formatProductPrice, selectedProductPrice } from "../research/prices";
 
 class CopyFitError extends WorkflowError {}
 
@@ -40,10 +41,10 @@ export function eligibleOffersForProduct(research: Research, productId: string, 
 }
 
 export function formatResearchedPrice(brief: Brief, research: Research) {
-  const price = research.products?.find(item => item.id === brief.productId)?.price;
+  const price = selectedProductPrice(research.products?.find(item => item.id === brief.productId), brief.variantId);
   if (!price) return null;
   try {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency: price.currency, currencyDisplay: "symbol" }).format(price.amount);
+    return formatProductPrice(price);
   } catch {
     throw new WorkflowError("The saved product price has an invalid currency and cannot be rendered safely.");
   }

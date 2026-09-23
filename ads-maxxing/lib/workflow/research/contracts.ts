@@ -11,11 +11,15 @@ export type ResearchState = z.infer<typeof researchStateSchema>;
 export type Direction = z.infer<typeof directionSchema>;
 export const evidenceSchema = z.object({ sourceUrl: url, quote: z.string().max(4000), method: z.enum(["json_ld", "shopify", "page", "branding", "user"]), origin: z.enum(["observed", "inferred", "user_supplied"]) });
 const optionalFinding = z.object({ status: z.enum(["found", "not_found", "not_checked", "failed"]), value: z.string().nullable(), evidence: evidenceSchema.optional() });
+export const productPriceSchema = z.object({
+  amount: z.number().nonnegative(), currency: z.string(), availability: z.string().nullable(),
+  maxAmount: z.number().nonnegative().optional(), compareAtAmount: z.number().nonnegative().nullable().optional(),
+});
 export const productSchema = z.object({
   id, canonicalUrl: url, storeId: z.string().nullable(), title: z.string(), description: z.string(),
   evidence: evidenceSchema, assetIds: z.array(id),
-  variants: z.array(z.object({ id, storeId: z.string(), title: z.string(), attributes: z.record(z.string(), z.string()), assetIds: z.array(id) })),
-  price: z.object({ amount: z.number().nonnegative(), currency: z.string(), availability: z.string().nullable() }).nullable(),
+  variants: z.array(z.object({ id, storeId: z.string(), title: z.string(), attributes: z.record(z.string(), z.string()), assetIds: z.array(id), price: productPriceSchema.nullable().optional() })),
+  price: productPriceSchema.nullable(),
 });
 export const assetSchema = z.object({
   id, originalUrl: url, sourceUrl: url,

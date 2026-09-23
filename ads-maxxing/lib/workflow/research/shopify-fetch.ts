@@ -11,7 +11,8 @@ export class ShopifyProductError extends Error {
   constructor(message: string, public kind: "unsupported" | "unavailable") { super(message); }
 }
 /** One bounded, DNS-pinned public read; redirects cannot change the store or selected product. */
-export async function readShopifyProduct(input: string): Promise<Record<string, unknown>> {
+type ReadContext = { cookie?: string; onCookies?: (cookies: string[]) => void };
+export async function readShopifyProduct(input: string, context: ReadContext = {}): Promise<Record<string, unknown>> {
   const url = new URL(input);
   if (url.protocol !== "https:" || url.username || url.password || url.port && url.port !== "443") throw new Error("Unsafe product endpoint");
   const signal = AbortSignal.timeout(10000);
@@ -22,11 +23,12 @@ export async function readShopifyProduct(input: string): Promise<Record<string, 
   if (!addresses.length || addresses.some(item => !publicAddress(item.address))) throw new Error("Product endpoint is not on a public network");
   const address = addresses[0];
   const response = await new Promise<import("node:http").IncomingMessage>((resolve, reject) => {
-    const options: import("node:http").RequestOptions & { autoSelectFamily: boolean } = { autoSelectFamily: false, signal, headers: { Accept: "application/json", "Accept-Encoding": "identity", "User-Agent": "node" }, lookup: (_host, _options, callback) => callback(null, address.address, address.family) };
+    const options: import("node:http").RequestOptions & { autoSelectFamily: boolean } = { autoSelectFamily: false, signal, headers: { Accept: "application/json", "Accept-Encoding": "identity", "User-Agent": "node", ...(context.cookie ? { Cookie: context.cookie } : {}) }, lookup: (_host, _options, callback) => callback(null, address.address, address.family) };
     const request = https.get(url, options, resolve);
     request.on("error", reject);
   });
   if (response.statusCode !== 200 || Number(response.headers["content-length"] || 0) > MAX_BYTES) { response.destroy(); throw new ShopifyProductError("Product JSON unavailable or too large", response.statusCode === 404 ? "unsupported" : "unavailable"); }
+  context.onCookies?.(response.headers["set-cookie"] || []);
   const chunks: Buffer[] = []; let size = 0;
   for await (const chunk of response) {
     const bytes = Buffer.from(chunk); size += bytes.length;
@@ -45,10 +47,12 @@ function compactProduct(product: Record<string, unknown>) {
   const image = (value: unknown) => typeof value === "string" ? value : Object.fromEntries(["id", "src", "url", "variant_ids"].filter(key => record(value)[key] !== undefined).map(key => [key, record(value)[key]]));
   return {
     id: product.id, handle: product.handle, title: plainText(product.title), description: plainText(product.description), options: product.options,
+    price: product.price, price_min: product.price_min, price_max: product.price_max, available: product.available,
+    compare_at_price: product.compare_at_price,
     images: Array.isArray(product.images) ? product.images.slice(0, MAX_RESEARCH_ASSETS).map(image) : [], featured_image: image(product.featured_image),
     variants: Array.isArray(product.variants) ? product.variants.map(value => {
       const variant = record(value);
-      return { ...Object.fromEntries(["id", "title", "options", "option1", "option2", "option3", "image_id", "available"].filter(key => variant[key] !== undefined).map(key => [key, variant[key]])), featured_image: image(variant.featured_image), featured_media: { preview_image: image(record(variant.featured_media).preview_image) } };
+      return { ...Object.fromEntries(["id", "title", "options", "option1", "option2", "option3", "image_id", "available", "price", "compare_at_price"].filter(key => variant[key] !== undefined).map(key => [key, variant[key]])), featured_image: image(variant.featured_image), featured_media: { preview_image: image(record(variant.featured_media).preview_image) } };
     }) : [],
   };
 }
@@ -71,14 +75,25 @@ export async function fetchShopifyProductSource(input: string, options: { shopif
   if (!handle || canonical.protocol !== "https:") throw new WorkflowError("Choose a public HTTPS Shopify product URL.", 400);
   const endpoint = new URL(canonical); endpoint.pathname += ".js";
   let product: Record<string, unknown>;
+  let cookie = "";
   try {
-    product = await read(endpoint.href);
+    product = await read(endpoint.href, { onCookies: cookies => { cookie = cookies.map(value => value.split(";", 1)[0]).join("; "); } });
     if (product.handle !== decodeURIComponent(handle) || !Array.isArray(product.variants) || !product.variants.length || !Array.isArray(product.options) || typeof product.title !== "string") throw new ShopifyProductError("Not a public Shopify product", "unsupported");
   } catch (error) {
     if (!options.shopifyKnown && error instanceof ShopifyProductError && error.kind === "unsupported") throw new WorkflowError("This version supports Shopify stores with public product data. Choose a Shopify product URL; existing saved research is retained.", 422);
     throw new WorkflowError("This Shopify product's public data is currently unavailable. Try this product again later or choose another public product URL; saved research is retained.", 502);
   }
   const compact = compactProduct(product), fetchedAt = new Date().toISOString();
+  let currency: NonNullable<Source["shopify"]>["currency"];
+  if (typeof compact.price === "number" || compact.variants.some(variant => typeof record(variant).price === "number")) {
+    // Product money uses the presentment currency. Read it in the same locale/session;
+    // never guess USD from a domain or a currency symbol. Cart contents are not saved.
+    const cartUrl = new URL(canonical); cartUrl.pathname = canonical.pathname.replace(/\/products\/[^/]+$/, "/cart.js");
+    try {
+      const cart = await read(cartUrl.href, { cookie });
+      if (typeof cart.currency === "string" && /^[A-Z]{3}$/.test(cart.currency)) currency = { code: cart.currency, sourceUrl: cartUrl.href, fetchedAt: new Date().toISOString() };
+    } catch { /* Optional pricing must not discard product/photo research. */ }
+  }
   const images = (compact.images as unknown[]).flatMap(value => { const url = typeof value === "string" ? value : record(value).src || record(value).url; try { return typeof url === "string" ? [new URL(url, canonical).href] : []; } catch { return []; } });
-  return { url: canonical.href, requestedUrl: input, finalUrl: canonical.href, title: compact.title, description: compact.description.slice(0, 4000), markdown: `${compact.title}\n\n${compact.description}`, images: [...new Set(images)].slice(0, MAX_RESEARCH_ASSETS), colors: {}, links: [], pageType: "product", fetchedAt, shopify: { url: endpoint.href, fetchedAt, product: compact } };
+  return { url: canonical.href, requestedUrl: input, finalUrl: canonical.href, title: compact.title, description: compact.description.slice(0, 4000), markdown: `${compact.title}\n\n${compact.description}`, images: [...new Set(images)].slice(0, MAX_RESEARCH_ASSETS), colors: {}, links: [], pageType: "product", fetchedAt, shopify: { url: endpoint.href, fetchedAt, product: compact, ...(currency ? { currency } : {}) } };
 }

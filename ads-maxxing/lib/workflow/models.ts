@@ -3,7 +3,7 @@ import { WorkflowError } from "./validation";
 
 export const FREE_WORKFLOW_MODEL = "inclusionai/ling-3.0-flash-vl-free";
 export const RESEARCHER_MODEL = "openai/gpt-5.4-nano";
-export const FINAL_AD_REVIEW_MODEL = "openai/gpt-5.4";
+export const FINAL_AD_REVIEW_MODEL = "google/gemini-2.5-flash";
 export const FINAL_AD_REVIEW_FALLBACK_MODEL = FREE_WORKFLOW_MODEL;
 
 function gatewayModel(model: string) {

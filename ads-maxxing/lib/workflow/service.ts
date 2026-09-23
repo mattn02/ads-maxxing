@@ -1,4 +1,5 @@
 import { observed } from "./diagnostics";
+import { acceptanceIssue } from "./review-acceptance";
 import { randomUUID } from "node:crypto";
 import { briefSchema, researchInputSchema, type BriefInput, type ResearchInput } from "./schema";
 import type { Brief, Research, Session, Variant } from "./session-types";
@@ -598,10 +599,11 @@ export class Workflow {
     const variant = this.session.variants.find(item => item.id === id);
     if (!variant) throw new WorkflowError("Variant not found.", 404);
     if (variant.status === "approved") return variant;
-    if (!["reviewed", "needs_changes", "needs_human", "review_failed"].includes(variant.status)) throw new WorkflowError("Wait for generation to finish before accepting this ad.", 409);
+    const issue = acceptanceIssue(variant);
+    if (issue) throw new WorkflowError(issue, 409);
     const acceptedAt = new Date().toISOString();
     variant.status = "approved";
-    variant.acceptance = { acceptedAt, reviewedAt: variant.review?.createdAt ?? acceptedAt };
+    variant.acceptance = { acceptedAt, reviewedAt: variant.review!.createdAt };
     await this.event("approve_ad", "completed", id);
     return variant;
   }

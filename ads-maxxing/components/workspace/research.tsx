@@ -4,6 +4,7 @@ import type { WorkflowAction } from "@/lib/workspace/api";
 import type { Session } from "@/lib/workflow/session-types";
 import { Badge, Button, EmptyState, SectionHeading } from "./ui";
 import "./onboarding.css";
+import { formatProductPrice } from "@/lib/workflow/research/prices";
 export function ResearchView({ session, busy, create, action }: {
   session: Session; busy: boolean; create: () => void; action: (body: WorkflowAction) => Promise<unknown>;
 }) {
@@ -35,7 +36,7 @@ export function ResearchView({ session, busy, create, action }: {
           <div className="images">{photos.map((asset) => <img key={asset.id} src={asset.originalUrl} alt={`Source photo of ${product.title}`} loading="lazy" />)}</div>
           {!photos.length && <p className="notice">No verified Shopify gallery image was found for this product.</p>}
           <h3>{product.title}</h3><p>{product.description}</p>
-          {product.price && <p className="small muted">{product.price.currency} {product.price.amount} · observed price</p>}
+          {product.price && <p className="small muted">{formatProductPrice(product.price)} · observed price</p>}
           <p className="small muted">{product.variants.length ? `${product.variants.length} evidenced variants` : "Variant not established; size or model will not be assumed."}</p>
           <div className="research-product-actions"><a href={product.canonicalUrl} target="_blank" rel="noreferrer">View source ↗</a><Button primary={choosingProduct && selected !== product.id} disabled={busy || selected === product.id} onClick={() => void action({ action: "selectProduct", productId: product.id })}>{selected === product.id ? "Selected product" : "Choose product →"}</Button></div>
         </article>;

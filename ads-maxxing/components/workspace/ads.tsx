@@ -17,6 +17,8 @@ import { Badge, Button, EmptyState, SectionHeading } from "./ui";
 import { OfferChoices, offerIssue } from "./offer-choices";
 import { AdPreviewImage } from "./ad-preview-image";
 import { AdSourceReference } from "./ad-source-reference";
+import { formatProductPrice, selectedProductPrice } from "@/lib/workflow/research/prices";
+import { acceptanceIssue } from "@/lib/workflow/review-acceptance";
 export function CampaignForm({
   session,
   busy,
@@ -130,10 +132,10 @@ export function BriefEditor({
     tokens: brief.tokens,
   });
   const [dirty, setDirty] = useState(brief.design?.version !== 2 || !brief.tokens);
-  const researchedPrice = session.research?.products?.find(product => product.id === draft.productId)?.price;
+  const researchedPrice = selectedProductPrice(session.research?.products?.find(product => product.id === draft.productId), draft.variantId);
   const formattedPrice = (() => {
     if (!researchedPrice) return null;
-    try { return new Intl.NumberFormat("en-US", { style: "currency", currency: researchedPrice.currency, currencyDisplay: "symbol" }).format(researchedPrice.amount); }
+    try { return formatProductPrice(researchedPrice); }
     catch { return null; }
   })();
   const uncertain = brief.sceneCheckpoint?.state === "attempted" && !brief.sceneCheckpoint.provider;
@@ -367,7 +369,8 @@ export function AdsView({
       variant,
     ];
     const versionNumber = history.findIndex((v) => v.id === variant.id) + 1;
-    const canAccept = ["reviewed", "needs_changes", "needs_human", "review_failed", "approved"].includes(variant.status);
+    const acceptanceProblem = acceptanceIssue(variant);
+    const canAccept = !acceptanceProblem;
     const criteria = variant.review ? [
       { label: "Product appearance", ...variant.review.visual.productFidelity },
       { label: "Text legibility", ...variant.review.visual.textLegibility },
@@ -407,7 +410,7 @@ export function AdsView({
               {criteria.map((criterion) => <p className="review-finding" key={criterion.label}><strong>{criterion.label} · {criterion.status === "uncertain" ? "Check this" : "Suggested change"}</strong><br />{criterion.reason}</p>)}
               {variant.review?.checks.filter((check) => !check.passed).map((check) => <p className="review-finding" key={check.name}><strong>{check.name}</strong><br />{check.detail}</p>)}
               <p className="muted small">
-                {variant.acceptance ? `Accepted on ${new Date(variant.acceptance.acceptedAt).toLocaleString()}. Automated feedback is kept with this version.` : "Automated feedback is advisory. Accept this version, refine it in chat, or generate a fresh visual."}
+                {variant.acceptance ? `Accepted on ${new Date(variant.acceptance.acceptedAt).toLocaleString()}. Automated feedback is kept with this version.` : acceptanceProblem || "Review any uncertain findings and accept this version, or refine it in chat."}
               </p>
               <div className="actions">
                 <Button

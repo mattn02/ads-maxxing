@@ -1,0 +1,6 @@
+.env*
+.agents/
+.codex/
+local-output/
+coverage/
+*.tsbuildinfo

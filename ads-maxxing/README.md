@@ -4,6 +4,8 @@ A working **research → approved brief → portrait ad → review → feedback*
 
 This is engineering documentation. The assignment's author-written note, Excalidraw diagram and Loom walkthrough remain separate deliverables.
 
+**Live demo:** [ads-maxxing.vercel.app](https://ads-maxxing.vercel.app). See [deployment configuration and verification](docs/deployment.md) for the production checks and redeployment instructions.
+
 ## Run locally
 
 Use Node.js **20.9 or newer** and install the locked dependencies:
@@ -23,7 +25,7 @@ FAL_AI_API_KEY=...
 AI_GATEWAY_KEY=...
 ```
 
-Apply all three SQL files in [`supabase/migrations/`](supabase/migrations/) in filename order using your Supabase project's SQL editor, then enable **anonymous sign-ins** in Authentication. The migrations create the private `creative-assets` bucket and protect shared brand corrections. See [Supabase setup and recovery](docs/supabase-setup.md) for provisioning, permissions and verification. Missing Supabase configuration produces a setup error; production has no local-file fallback.
+Apply all six SQL files in [`supabase/migrations/`](supabase/migrations/) in filename order using your Supabase project's SQL editor, then enable **anonymous sign-ins** in Authentication. The migrations create the private `creative-assets` bucket and protect shared brand corrections. See [Supabase setup and recovery](docs/supabase-setup.md) for provisioning, permissions and verification. Missing Supabase configuration produces a setup error; production has no local-file fallback.
 
 ```sh
 npm run dev -- --hostname 127.0.0.1
@@ -31,9 +33,9 @@ npm run dev -- --hostname 127.0.0.1
 
 Open [localhost:3000](http://localhost:3000). The initial workspace request establishes a private anonymous identity using HttpOnly cookies. Reloading in the same browser restores its campaigns. Clearing cookies or using another browser creates a different identity; cross-device account recovery is not implemented.
 
-Supported environment aliases are `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` and `AI_GATEWAY_API_KEY`. Keep all provider keys and the Supabase secret server-only. Optional `CONCIERGE_MODEL`, `RESEARCHER_MODEL`, and `BRIEF_MODEL` overrides select the text roles. Initial briefs, refinements, and copy repairs use `BRIEF_MODEL` (default `openai/gpt-5.4-nano`) with provider-enforced structured output and a 4096-token budget; overrides must support JSON schema output. Research synthesis defaults to `openai/gpt-5.4-nano` because it supports provider-enforced structured output; the concierge defaults to `inclusionai/ling-3.0-flash-vl-free`. `FINAL_AD_REVIEW_MODEL` configures the stronger final creative review and defaults to `openai/gpt-5.4`; it must support image input. If the Gateway denies access to that model, review falls back once to the separately configurable `FINAL_AD_REVIEW_FALLBACK_MODEL`, which defaults to `inclusionai/ling-3.0-flash-vl-free`. The single fal image request is isolated in `lib/workflow/fal.ts`.
+Supported environment aliases are `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` and `AI_GATEWAY_API_KEY`. Keep all provider keys and the Supabase secret server-only. Optional `CONCIERGE_MODEL`, `RESEARCHER_MODEL`, and `BRIEF_MODEL` overrides select the text roles. Initial briefs, refinements, and copy repairs use `BRIEF_MODEL` (default `openai/gpt-5.4-nano`) with provider-enforced structured output and a 4096-token budget; overrides must support JSON schema output. Research synthesis defaults to `openai/gpt-5.4-nano` because it supports provider-enforced structured output; the concierge defaults to `inclusionai/ling-3.0-flash-vl-free`. `FINAL_AD_REVIEW_MODEL` configures the stronger final creative review and defaults to `google/gemini-2.5-flash`; it must support image input. If the Gateway denies access to that model, review falls back once to the separately configurable `FINAL_AD_REVIEW_FALLBACK_MODEL`, which defaults to `inclusionai/ling-3.0-flash-vl-free`. The single fal image request is isolated in `lib/workflow/fal.ts`.
 
-For Vercel, configure the same environment, use the Node runtime and `npm run build -- --webpack`, and provision Supabase first. Durable data lives outside the deployment filesystem. A successful local build does not establish that hosted Auth, Storage or a deployed workflow has been verified.
+For Vercel, configure the same environment and provision Supabase first. `vercel.json` selects Next.js, the verified webpack build and Fluid compute; the long-running workflow routes use the Node runtime with a 300-second duration. `.vercelignore` excludes local secrets and generated artifacts from CLI uploads. Durable data lives outside the deployment filesystem. A successful local build does not establish that hosted Auth, Storage or a deployed workflow has been verified.
 
 ## Use the workspace
 
@@ -111,6 +113,6 @@ The optimized production webpack build also passed. A local browser check agains
 
 The main limits are product fidelity, incomplete store markup and operational hardening. The extractor supports structured product/gallery/offer evidence, not every arbitrary DOM gallery; unresolved assets need user confirmation. Asset role suggestions do not establish product or variant ownership; grounding still requires saved product evidence or an explicit user correction. There is no browser fallback or invented customer evidence. Source bytes retain their original orientation/color metadata. Reference-conditioned generation and vision review cannot guarantee exact logos, tiny markings or physical details. Review findings need human inspection.
 
-There is no durable job queue, global spending cap, cross-device anonymous account recovery or automatic cleanup. Research/provider calls are bounded and automatic LLM retries are disabled, but those controls do not replace production rate limits or spend monitoring. Local application checks and live Supabase verification are recorded above. A deployed Vercel workflow and five complete live ad campaigns remain unverified; consult the linked records for the exact evidence.
+There is no durable job queue, global spending cap, cross-device anonymous account recovery or automatic cleanup. Research/provider calls are bounded and automatic LLM retries are disabled, but those controls do not replace production rate limits or spend monitoring. Local application checks and live Supabase verification are recorded above. Vercel deployment, hosted sign-in, Loopy brand research and reload persistence are verified in the [deployment record](docs/deployment.md). Hosted image generation and five complete live ad campaigns remain unverified; consult the linked records for the exact evidence.
 
 Twemoji artwork is by Twitter and other contributors, distributed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); [source](https://github.com/jdecked/twemoji). SVG artwork is unchanged apart from display sizing.

@@ -3,6 +3,7 @@ import type { Source } from "../session-types";
 import type { Evidence, ResearchAsset, ResearchProduct, ResearchV2Fields } from "./contracts";
 import { webUrl } from "../validation";
 import { shopifyImages, shopifyProductNodes, shopifyVariants } from "./shopify-variants";
+import { shopifyPrice, shopifyProductPrice } from "./prices";
 
 export const stableId = (kind: string, value: string) => `${kind}_${createHash("sha256").update(value).digest("hex").slice(0, 24)}`;
 export function canonicalUrl(value: string) {
@@ -119,15 +120,16 @@ export function extractSource(source: Source): { products: ResearchProduct[]; as
     const declared = node === source.shopify?.product ? source.finalUrl || source.url : absolute(node.url || (typeof node.handle === "string" ? `/products/${node.handle}` : undefined), source.finalUrl || source.url);
     if (!declared || productIdentityUrl(declared) !== productIdentityUrl(source.finalUrl || source.url) || pageHint(declared) !== "product") continue;
     const canonical = productIdentityUrl(declared), productId = stableId("product", canonical);
+    const currency = node === source.shopify?.product ? source.shopify.currency?.code : undefined;
     const evidence: Evidence = { sourceUrl: node === source.shopify?.product ? source.shopify.url : source.url, quote: JSON.stringify({ id: node.id, handle: node.handle, options: node.options }).slice(0, 4000), method: "shopify", origin: "observed" };
     const assetIds = shopifyImages(node).flatMap(image => { const url = absolute(image, source.url); return url ? [addAsset(url, "product_photo", evidence, productId)] : []; });
     const variants = shopifyVariants(node).map(variant => {
       const id = stableId("variant", `${productId}:${variant.storeId}`);
       const variantEvidence = { ...evidence, quote: JSON.stringify({ productId: node.id, variantId: variant.storeId, attributes: variant.attributes, images: variant.images }).slice(0, 4000) };
       const variantAssets = variant.images.flatMap(image => { const url = absolute(image, source.url); if (!url) return []; const assetId = addAsset(url, "product_photo", variantEvidence, productId); assets.get(assetId)!.variantIds.push(id); assets.get(assetId)!.evidence = variantEvidence; return [assetId]; });
-      return { id, storeId: variant.storeId, title: variant.title, attributes: variant.attributes, assetIds: variantAssets };
+      return { id, storeId: variant.storeId, title: variant.title, attributes: variant.attributes, assetIds: variantAssets, price: shopifyPrice(variant, currency) };
     });
-    products.push({ id: productId, canonicalUrl: canonical, storeId: typeof node.id === "number" || typeof node.id === "string" ? String(node.id) : null, title: text(node.title) || source.title, description: text(node.description) || source.description, evidence, assetIds: [...new Set([...assetIds, ...variants.flatMap(variant => variant.assetIds)])], variants, price: null });
+    products.push({ id: productId, canonicalUrl: canonical, storeId: typeof node.id === "number" || typeof node.id === "string" ? String(node.id) : null, title: text(node.title) || source.title, description: text(node.description) || source.description, evidence, assetIds: [...new Set([...assetIds, ...variants.flatMap(variant => variant.assetIds)])], variants, price: shopifyProductPrice(node, currency) });
   }
   const brandingImages = object(source.branding?.images);
   const logos = [brandingImages.logo, source.branding?.logo, ...structured.filter(node => isType(node, "Organization")).map(node => typeof node.logo === "string" ? node.logo : object(node.logo).url)];
@@ -137,7 +139,7 @@ export function extractSource(source: Source): { products: ResearchProduct[]; as
   const groupedProducts = new Map<string, ResearchProduct>();
   for (const product of products) {
     const old = groupedProducts.get(product.id);
-    groupedProducts.set(product.id, old ? { ...old, title: old.title === product.title ? old.title : source.title,
+    groupedProducts.set(product.id, old ? { ...old, price: product.price ?? old.price, title: old.title === product.title ? old.title : source.title,
       assetIds: [...new Set([...old.assetIds, ...product.assetIds])], variants: [...new Map([...old.variants, ...product.variants].map(variant => {
         const previous = old.variants.find(item => item.id === variant.id);
         return [variant.id, previous ? { ...previous, ...variant, attributes: { ...previous.attributes, ...variant.attributes }, assetIds: [...new Set([...previous.assetIds, ...variant.assetIds])] } : variant];
