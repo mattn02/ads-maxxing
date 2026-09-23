@@ -10,7 +10,7 @@ import { codeChecks } from "../lib/workflow/agents/reviewer";
 import { MODEL } from "../lib/workflow/fal";
 import { DEFAULT_DESIGN, designSchema } from "../lib/workflow/creative/schema";
 import { resolveBrandTokens, readableText } from "../lib/workflow/creative/tokens";
-import { validateCreative } from "../lib/workflow/creative/fit";
+import { resolveCommercialCopy, validateCreative } from "../lib/workflow/creative/fit";
 import { renderCreative } from "../lib/workflow/creative/render";
 import { planExecution, validatePlan } from "../lib/workflow/creative/reuse";
 import type { Brief, Source, Session, Variant } from "../lib/workflow/session-types";
@@ -22,6 +22,25 @@ const research = { ...baseResearch, sales: legacyResearch.sales, offers: legacyR
 const geistTokens = { background: "#f6f3ee", foreground: "#000000", accent: "#000000", ctaForeground: "#ffffff", fontId: "geist-fallback" as const };
 const makeBrief = (): Brief => ({ productId: research.products![0].id, referenceAssetId: research.assets!.find(asset => asset.originalUrl === source.images[0])!.id, id: randomUUID(), researchId: research.id, productUrl: source.url, referenceImage: source.images[0], headline: "Hold on to color", cta: "Shop now", direction: "Overall intent", saleId: null, feedback: "", parentVariantId: null, design: { ...DEFAULT_DESIGN }, tokens: { ...geistTokens } });
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCfkAAAAASUVORK5CYII=", "base64");
+
+test("composition and review share plain offer copy while preserving exact source evidence", async () => {
+  const quote = "###### **Get Free** US Ground Advantage Shipping On Orders $55+";
+  const offerResearch = structuredClone(research);
+  offerResearch.sources[0].markdown = quote;
+  offerResearch.sales[0].quote = quote;
+  offerResearch.offers[0].quote = quote;
+  const brief = { ...makeBrief(), saleId: offerResearch.sales[0].id };
+  const commercial = resolveCommercialCopy(brief, offerResearch);
+  assert.equal(commercial.offer, "Get Free US Ground Advantage Shipping On Orders $55+");
+  const fitted = await validateCreative(brief, offerResearch);
+  assert.equal(fitted.offer!.lines.join(""), commercial.offer);
+  const variant = { rendererVersion: 6, brief, research: offerResearch, renderedCopy: { headline: brief.headline, cta: brief.cta, ...commercial } } as Variant;
+  const checks = codeChecks(variant, png);
+  assert.equal(checks.find(check => check.name === "exact_copy")!.passed, true);
+  assert.equal(checks.find(check => check.name === "sale_evidence")!.passed, true);
+  assert.equal(offerResearch.sales[0].quote, quote);
+  assert.equal(offerResearch.sources[0].markdown, quote);
+});
 
 test("the transparent overlay preserves the full scene in both legacy template modes", async () => {
   const scene = await sharp(Buffer.from('<svg width="576" height="1024"><rect width="576" height="1024" fill="#ff00ff"/><rect width="576" height="64" fill="#00ff00"/><rect y="960" width="576" height="64" fill="#0000ff"/></svg>')).png().toBuffer();

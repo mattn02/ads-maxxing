@@ -5,6 +5,7 @@ import { brandTokensSchema, creativeFontFamily, designSchema, type BrandTokens }
 import { emojiImages, graphemes, textRuns } from "./emoji";
 import { loadCreativeFont } from "./fonts";
 import { formatProductPrice, selectedProductPrice } from "../research/prices";
+import { plainOffer } from "./offer-copy";
 
 class CopyFitError extends WorkflowError {}
 
@@ -51,9 +52,10 @@ export function formatResearchedPrice(brief: Brief, research: Research) {
 }
 
 export function resolveCommercialCopy(brief: Brief, research: Research) {
+  const confirmed = currentConfirmedOffer(brief, research);
   return {
     price: formatResearchedPrice(brief, research),
-    offer: currentConfirmedOffer(brief, research)?.sale.quote ?? null,
+    offer: confirmed ? plainOffer(confirmed.sale.quote) : null,
   };
 }
 
