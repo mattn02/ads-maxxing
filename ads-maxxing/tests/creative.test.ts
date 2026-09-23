@@ -42,14 +42,18 @@ test("composition and review share plain offer copy while preserving exact sourc
   assert.equal(offerResearch.sources[0].markdown, quote);
 });
 
-test("the transparent overlay preserves the full scene in both legacy template modes", async () => {
+test("compact copy fades preserve the central and bottom scene in both legacy template modes", async () => {
   const scene = await sharp(Buffer.from('<svg width="576" height="1024"><rect width="576" height="1024" fill="#ff00ff"/><rect width="576" height="64" fill="#00ff00"/><rect y="960" width="576" height="64" fill="#0000ff"/></svg>')).png().toBuffer();
   for (const template of ["copy-top", "photo-top"] as const) {
     const brief = makeBrief(); brief.design = { ...brief.design!, template };
     const output = await renderCreative({ brief, research, tokens: brief.tokens!, visualBytes: scene });
     const { data, info } = await sharp(output).removeAlpha().raw().toBuffer({ resolveWithObject: true });
     const pixel = (y: number) => [...data.subarray((y * info.width + 288) * info.channels, (y * info.width + 288) * info.channels + 3)];
-    assert.deepEqual(pixel(300), [255, 0, 255], `${template} has no copy-panel fill`);
+    const fadePixel = (y: number) => [...data.subarray((y * info.width + 16) * info.channels, (y * info.width + 16) * info.channels + 3)];
+    assert.ok(fadePixel(100)[1] > 220, "headline has a dense light backing even over a saturated scene");
+    assert.ok(fadePixel(145)[1] > 0 && fadePixel(145)[1] < 220, "the edge fades gradually back to the photo");
+    assert.deepEqual(fadePixel(165), [255, 0, 255], "short copy does not fill the reserved headline slot");
+    assert.deepEqual(pixel(300), [255, 0, 255], `${template} keeps the product area untouched`);
     assert.deepEqual(pixel(1010), [0, 0, 255], `${template} preserves the bottom scene detail`);
   }
 });

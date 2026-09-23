@@ -52,7 +52,7 @@ export type BrandTokens = z.infer<typeof brandTokensSchema>;
 export function creativeFontFamily(tokens: BrandTokens) {
   return tokens.fontId === "fontsource" ? tokens.family : "Geist";
 }
-export const RENDERER_VERSION = 6;
+export const RENDERER_VERSION = 7;
 export type VisualInputs = {
   researchId: string; productUrl: string; referenceImage: string; visualDirection: string;
   model: string; background: string; accent: string;

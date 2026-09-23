@@ -52,9 +52,28 @@ function CopyGroup({ design, tokens, copy, logoBytes }: TemplateProps) {
     </div>
   </div>;
 }
+// Paint every fade before the copy so neighboring feathers cannot wash out text.
+// Protect fitted text height only, rather than filling the larger reserved slots.
+function CopyProtection({ copy, tokens, logoBytes }: TemplateProps) {
+  const rgb = [1, 3, 5].map(offset => parseInt(tokens.background.slice(offset, offset + 2), 16)).join(", ");
+  const textHeight = (text: FittedText) => text.lines.length * text.lineHeight;
+  const headlineHeight = textHeight(copy.headline);
+  const bands = [{ top: 24 + (logoBytes ? 40 : 0) + (168 - headlineHeight) / 2, height: headlineHeight }];
+  if (logoBytes) bands.push({ top: 24, height: Math.min(160 / logoBytes.width, 28 / logoBytes.height) * logoBytes.height });
+  // Bottom stack: 24px inset, 48px CTA + 10px gap, optional price/offer slots.
+  const footerTop = 1024 - 24 - 48 - 10 - (copy.price ? 42 : 0) - (copy.offer ? 60 : 0);
+  if (copy.price) bands.push({ top: footerTop + 8, height: textHeight(copy.price) });
+  if (copy.offer) bands.push({ top: footerTop + (copy.price ? 42 : 0) + 6, height: textHeight(copy.offer) });
+  const feather = 20;
+  return <div style={{ display: "flex", position: "absolute", left: 0, top: 0, width: 576, height: 1024, overflow: "hidden" }}>
+    {bands.map((band, index) => <div key={index} style={{ position: "absolute", left: 0, top: band.top - feather, width: 576, height: band.height + feather * 2,
+      backgroundImage: `linear-gradient(to bottom, rgba(${rgb}, 0) 0px, rgba(${rgb}, 0.94) ${feather}px, rgba(${rgb}, 0.94) ${band.height + feather}px, rgba(${rgb}, 0) ${band.height + feather * 2}px)` }} />)}
+  </div>;
+}
 export function CreativeTemplate(props: TemplateProps) {
   return <div style={{ display: "flex", position: "relative", width: 576, height: 1024, background: props.tokens.background, color: props.tokens.foreground, fontFamily: creativeFontFamily(props.tokens), fontWeight: 400 }}>
     <ProductVisual bytes={props.visualBytes} design={props.design} />
+    <CopyProtection {...props} />
     <CopyGroup {...props} />
   </div>;
 }

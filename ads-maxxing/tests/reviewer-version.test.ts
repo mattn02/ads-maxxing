@@ -10,9 +10,9 @@ const variant = (rendererVersion: number) => ({ id, rendererVersion, brief: { id
 
 test("review accepts supported renderer versions and unknown versions cannot pass", () => {
   const pass = { status: "pass" as const, reason: "Visible" };
-  for (const version of [1, 2, 3, 4, 5, 999]) {
+  for (const version of [1, 2, 3, 4, 5, 6, 7, 999]) {
     const check = codeChecks(variant(version), png).find(check => check.name === "renderer_version")!;
-    assert.equal(check.passed, [2, 3, 4, 5].includes(version));
+    assert.equal(check.passed, [2, 3, 4, 5, 6, 7].includes(version));
     assert.equal(reviewVerdict([check], { productFidelity: pass, textLegibility: pass, claimAccuracy: pass, brandFit: pass, summary: "Visible" }), check.passed ? "pass" : "needs_changes");
   }
 });
@@ -33,10 +33,10 @@ test("supported renderers refuse fidelity review without the saved original befo
     assert.fail("Review must not contact the model or a remote product photo without the saved original");
   });
   try {
-    for (const version of [2, 3, 4, 5]) await persistenceContext.run({ userId: id }, async () => {
+    for (const version of [2, 3, 4, 5, 6, 7]) await persistenceContext.run({ userId: id }, async () => {
       await assert.rejects(reviewAd(variant(version)), /Saved original is missing; fidelity review cannot run/);
     });
-    assert.equal(reads, 12);
+    assert.equal(reads, 18);
   } finally {
     keys.forEach((key, index) => { if (previous[index] === undefined) delete process.env[key]; else process.env[key] = previous[index]; });
   }
