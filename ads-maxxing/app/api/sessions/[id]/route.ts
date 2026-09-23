@@ -23,7 +23,7 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("approveBrief"), briefId: z.string() }),
   z.object({ action: z.literal("generateAd"), briefId: z.string().min(1) }),
   z.object({ action: z.literal("reviseBrief"), brief: briefSchema }),
-  z.object({ action: z.literal("approveAd"), variantId: z.string() }),
+  z.object({ action: z.literal("approveAd"), variantId: z.string(), overrideReview: z.boolean().optional() }),
   z.object({ action: z.literal("reviewAd"), variantId: z.string() }),
 ]);
 export async function GET(_request: Request, { params }: Context) {
@@ -63,7 +63,7 @@ export async function POST(request: Request, { params }: Context) {
       case "approveBrief": await workflow.approveBrief(action.briefId); break;
       case "generateAd": await workflow.generate(action.briefId); break;
       case "reviseBrief": await workflow.proposeBrief(action.brief); break;
-      case "approveAd": await workflow.approveVariant(action.variantId); break;
+      case "approveAd": await workflow.approveVariant(action.variantId, action.overrideReview); break;
       case "reviewAd": await workflow.review(action.variantId); break;
     }
     // The lease is released in finally before the browser can start its next step.

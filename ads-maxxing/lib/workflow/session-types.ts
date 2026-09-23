@@ -56,7 +56,7 @@ export type Variant = Generation & {
   status: "pending_review" | "review_failed" | "needs_changes" | "needs_human" | "reviewed" | "approved";
   review?: Review;
   reviewError?: string;
-  acceptance?: { acceptedAt: string; reviewedAt: string };
+  acceptance?: { acceptedAt: string; reviewedAt: string; reviewOverridden?: boolean };
 };
 export type Session = {
   nextAction?: import("./generation-contracts").NextAction;

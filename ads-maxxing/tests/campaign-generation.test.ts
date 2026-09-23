@@ -33,7 +33,7 @@ function fixture(prepareResearch?: (research: Research) => void) {
       }
       return { id: brief.id, imageUrl: `/api/outputs/${brief.id}`, model: "fixture", prompt: "Fixture", referenceImage: brief.referenceImage, sourceAssetId: brief.sourceAssetId, sceneAssetId: brief.executionPlan!.scene.assetId, sceneAsset: brief.sceneCheckpoint?.asset ?? execution.scene, createdAt: "now" };
     },
-    reviewAd: async () => { counts.review++; if (fail.review) throw new Error("review unavailable"); const pass = { status: "pass" as const, reason: "TEST ONLY" }; return { verdict: "pass", checks: [{ name: "fixture", passed: true, detail: "TEST ONLY" }], createdAt: "now", visual: { productFidelity: pass, textLegibility: pass, claimAccuracy: pass, brandFit: pass, summary: "TEST ONLY" } }; },
+    reviewAd: async () => { counts.review++; if (fail.review) throw new Error("review unavailable"); const pass = { status: "pass" as const, reason: "TEST ONLY" }; return { verdict: "pass", checks: [{ name: "fixture", passed: true, detail: "TEST ONLY" }], createdAt: "2026-09-22T06:00:00.000Z", visual: { productFidelity: pass, textLegibility: pass, claimAccuracy: pass, brandFit: pass, summary: "TEST ONLY" } }; },
   };
   let workflow = new Workflow(session, deps);
   return { get workflow() { return workflow; }, counts, fail, reload: () => { workflow = new Workflow(structuredClone(stored), deps); return workflow; } };
@@ -297,17 +297,36 @@ test("explicit regenerate preserves copy and creates one fresh complete scene wi
 
 test("human acceptance retains uncertain automated review and is revoked on a fresh review", async () => {
   const h = fixture(), id = randomUUID(); await h.workflow.generateCampaign(id, input); await confirmReady(h.workflow, id); await h.reload().continueCampaign(id); await h.reload().continueCampaign(id);
-  const variant = h.workflow.session.variants[0]; variant.status = "needs_human"; variant.review!.verdict = "needs_human";
+  let variant = h.workflow.session.variants[0]; variant.status = "needs_human"; variant.review!.verdict = "needs_human";
   const review = structuredClone(variant.review); await h.workflow.approveVariant(variant.id);
   assert.equal(variant.status, "approved"); assert.deepEqual(variant.review, review); assert.equal(variant.acceptance!.reviewedAt, review!.createdAt);
   const acceptedAt = variant.acceptance!.acceptedAt; await h.workflow.approveVariant(variant.id); assert.equal(variant.acceptance!.acceptedAt, acceptedAt);
   await h.workflow.review(variant.id); assert.equal(variant.acceptance, undefined);
-  variant.review!.checks[0].passed = false; await h.workflow.approveVariant(variant.id);
+  variant.review!.checks[0].passed = false;
+  await assert.rejects(h.workflow.approveVariant(variant.id), /Accept anyway/);
+  const findings = structuredClone(variant.review);
+  await h.workflow.approveVariant(variant.id, true);
+  assert.equal(variant.acceptance!.reviewOverridden, true);
+  assert.deepEqual(variant.review, findings);
   assert.equal(variant.status, "approved");
   await h.workflow.review(variant.id);
-  variant.review!.checks = []; await h.workflow.approveVariant(variant.id);
+  variant.review!.checks = []; await assert.rejects(h.workflow.approveVariant(variant.id, true), /complete source/);
   variant.review!.checks = [{ name: "valid", passed: true, detail: "TEST ONLY" }]; variant.review!.verdict = "needs_changes";
-  await h.workflow.review(variant.id); variant.review!.verdict = "needs_changes"; await h.workflow.approveVariant(variant.id);
+  await h.workflow.review(variant.id); variant.review!.verdict = "needs_changes"; variant.status = "needs_changes";
+  await assert.rejects(h.workflow.approveVariant(variant.id), /Accept anyway/);
+  await h.workflow.approveVariant(variant.id, true);
+  assert.equal(variant.acceptance!.reviewOverridden, true);
+  assert.equal(variant.review!.verdict, "needs_changes");
+  variant = h.reload().session.variants[0];
+  assert.equal(variant.acceptance!.reviewOverridden, true);
+  await h.workflow.review(variant.id);
+  assert.equal(variant.acceptance, undefined);
+  variant.status = "pending_review";
+  await assert.rejects(h.workflow.approveVariant(variant.id, true), /Complete the review/);
+  variant.status = "review_failed";
+  await assert.rejects(h.workflow.approveVariant(variant.id, true), /Retry review/);
+  variant.status = "reviewed"; variant.review!.createdAt = "invalid";
+  await assert.rejects(h.workflow.approveVariant(variant.id, true), /valid review timestamp/);
 });
 
 test("refining an older ad keeps current membership, direction and compatible saved scene", async () => {

@@ -18,7 +18,7 @@ import { OfferChoices, offerIssue } from "./offer-choices";
 import { AdPreviewImage } from "./ad-preview-image";
 import { AdSourceReference } from "./ad-source-reference";
 import { formatProductPrice, selectedProductPrice } from "@/lib/workflow/research/prices";
-import { acceptanceIssue } from "@/lib/workflow/review-acceptance";
+import { acceptanceIssue, requiresReviewOverride } from "@/lib/workflow/review-acceptance";
 export function CampaignForm({
   session,
   busy,
@@ -369,7 +369,8 @@ export function AdsView({
       variant,
     ];
     const versionNumber = history.findIndex((v) => v.id === variant.id) + 1;
-    const acceptanceProblem = acceptanceIssue(variant);
+    const overrideReview = requiresReviewOverride(variant);
+    const acceptanceProblem = acceptanceIssue(variant, overrideReview);
     const canAccept = !acceptanceProblem;
     const criteria = variant.review ? [
       { label: "Product appearance", ...variant.review.visual.productFidelity },
@@ -410,17 +411,17 @@ export function AdsView({
               {criteria.map((criterion) => <p className="review-finding" key={criterion.label}><strong>{criterion.label} · {criterion.status === "uncertain" ? "Check this" : "Suggested change"}</strong><br />{criterion.reason}</p>)}
               {variant.review?.checks.filter((check) => !check.passed).map((check) => <p className="review-finding" key={check.name}><strong>{check.name}</strong><br />{check.detail}</p>)}
               <p className="muted small">
-                {variant.acceptance ? `Accepted on ${new Date(variant.acceptance.acceptedAt).toLocaleString()}. Automated feedback is kept with this version.` : acceptanceProblem || "Review any uncertain findings and accept this version, or refine it in chat."}
+                {variant.acceptance ? `Accepted on ${new Date(variant.acceptance.acceptedAt).toLocaleString()}.${variant.acceptance.reviewOverridden ? " You overrode the reviewer’s recommendation." : ""} Automated feedback is kept with this version.` : acceptanceProblem || (overrideReview ? "The reviewer recommends changes. You can accept this ad anyway; its findings will stay saved with this version." : "Review any uncertain findings and accept this version, or refine it in chat.")}
               </p>
               <div className="actions">
                 <Button
                   primary
-                  disabled={busy || !canAccept}
+                  disabled={busy || !canAccept || variant.status === "approved"}
                   onClick={() =>
-                    void action({ action: "approveAd", variantId: variant.id })
+                    void action({ action: "approveAd", variantId: variant.id, overrideReview })
                   }
                 >
-                  {variant.status === "approved" ? "Accepted ✓" : "Accept ad"}
+                  {variant.status === "approved" ? "Accepted ✓" : overrideReview ? "Accept anyway" : "Accept ad"}
                 </Button>
                 <Button disabled={busy} onClick={() => feedback(variant)}>Refine this ad →</Button>
                 <Button
@@ -429,7 +430,7 @@ export function AdsView({
                 >
                   Regenerate visual
                 </Button>
-                {variant.status === "review_failed" && (
+                {(variant.status === "review_failed" || (acceptanceProblem && variant.status !== "pending_review")) && (
                   <Button
                     disabled={busy}
                     onClick={() =>

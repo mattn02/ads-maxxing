@@ -38,8 +38,8 @@ const read = async () => (await db.query("select generation,approved_at,review_s
 const legacyApprovedAt = (await read()).approved_at;
 const migration = await readFile(new URL(migrationName, directory), "utf8");
 await db.exec(migration);
+await db.exec(await readFile(new URL("202609220006_research_reference.sql", directory), "utf8"));
 if (process.env.TEST_RESEARCH_REFERENCE === "1") {
-  await db.exec(await readFile(new URL("202609220006_research_reference.sql", directory), "utf8"));
   rpc = "commit_campaign_v2";
 }
 await save();
@@ -104,5 +104,43 @@ await assert.rejects(call(rpc, [owner, campaign, lease.token, lease.revision, se
 await db.exec("reset role");
 await assert.rejects(db.exec(migration), /Unexpected commit_campaign definition/, "Guarded patch rejects unexpected or already-patched predecessor");
 await db.exec("rollback");
+const overrideMigration = await readFile(new URL("202609220007_review_override.sql", directory), "utf8");
+await db.exec(overrideMigration);
+for (const target of ["commit_campaign", "commit_campaign_v2"]) {
+  rpc = target;
+  for (const [verdict, checks] of [
+    ["needs_changes", [{ name: "portrait_9_16", passed: true }]],
+    ["pass", [{ name: "source_photo", passed: false }]],
+  ]) {
+    variant.status = "needs_changes"; variant.review = review(verdict, checks); delete variant.acceptance; await save();
+    const savedReview = structuredClone(variant.review);
+    variant.status = "approved"; variant.acceptance = acceptance();
+    await assert.rejects(save(), /Explicitly override/);
+    variant.acceptance.reviewOverridden = "true";
+    await assert.rejects(save(), /must be a boolean/);
+    variant.acceptance.reviewOverridden = true; await save();
+    assert.deepEqual((await read()).generation.review, savedReview);
+    assert.equal((await read()).generation.acceptance.reviewOverridden, true);
+    await save();
+    variant.acceptance.reviewOverridden = false;
+    await assert.rejects(save(), /Explicitly override|cannot be changed/);
+    variant.status = "pending_review"; delete variant.acceptance; delete variant.review; await save();
+    assert.equal((await read()).approved_at, null);
+  }
+  for (const [status, output, expected] of [
+    ["reviewed", review("pass", []), /boolean deterministic/],
+    ["reviewed", review("pass", [{ passed: "true" }]), /boolean deterministic/],
+    ["pending_review", review(), /completed review/],
+    ["review_failed", review(), /completed review/],
+    ["reviewed", { ...review(), createdAt: "invalid" }, /invalid input syntax/],
+  ]) {
+    variant.status = status; variant.review = output; delete variant.acceptance; await save();
+    variant.status = "approved"; variant.acceptance = { ...acceptance(), reviewOverridden: true };
+    await assert.rejects(save(), expected);
+  }
+}
+await assert.rejects(db.exec(overrideMigration), /Unexpected .* definition/);
+await db.exec("rollback");
 await db.close();
+console.log("PASS: explicit reviewer overrides persist in both RPCs, preserve findings and revoke on re-review; incomplete/malformed reviews remain blocked.");
 console.log("PASS: legacy approvals, uncertain acceptance, strict deterministic checks, durable unchanged review, acceptance timestamps, re-review revocation, immutable final content, owner isolation and RPC grants.");

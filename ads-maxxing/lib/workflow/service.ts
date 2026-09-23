@@ -1,5 +1,5 @@
 import { observed } from "./diagnostics";
-import { acceptanceIssue } from "./review-acceptance";
+import { acceptanceIssue, requiresReviewOverride } from "./review-acceptance";
 import { randomUUID } from "node:crypto";
 import { briefSchema, researchInputSchema, type BriefInput, type ResearchInput } from "./schema";
 import type { Brief, Research, Session, Variant } from "./session-types";
@@ -595,15 +595,15 @@ export class Workflow {
     await this.event("remember", "completed", key);
     return this.session.preferences;
   }
-  async approveVariant(id: string) {
+  async approveVariant(id: string, overrideReview = false) {
     const variant = this.session.variants.find(item => item.id === id);
     if (!variant) throw new WorkflowError("Variant not found.", 404);
     if (variant.status === "approved") return variant;
-    const issue = acceptanceIssue(variant);
+    const issue = acceptanceIssue(variant, overrideReview);
     if (issue) throw new WorkflowError(issue, 409);
     const acceptedAt = new Date().toISOString();
     variant.status = "approved";
-    variant.acceptance = { acceptedAt, reviewedAt: variant.review!.createdAt };
+    variant.acceptance = { acceptedAt, reviewedAt: variant.review!.createdAt, ...(overrideReview && requiresReviewOverride(variant) ? { reviewOverridden: true } : {}) };
     await this.event("approve_ad", "completed", id);
     return variant;
   }

@@ -19,7 +19,8 @@ export type WorkflowAction =
   | { action: "correctBrand"; field: "voice" | "audience" | "valueProposition"; value: string }
   | { action: "approveBrief" | "generateAd"; briefId: string }
   | { action: "reviseBrief"; brief: Brief }
-  | { action: "approveAd" | "reviewAd"; variantId: string };
+  | { action: "approveAd"; variantId: string; overrideReview?: boolean }
+  | { action: "reviewAd"; variantId: string };
 export async function request<T>(url: string, body?: unknown): Promise<T> {
   const response = await fetch(
     url,

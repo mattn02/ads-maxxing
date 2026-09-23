@@ -157,7 +157,7 @@ async function harness() {
     readAsset: artistDeps.readAsset, readVisual: artistDeps.readAsset,
     save: async current => { if (fail.checkpoint && current.brief?.sceneCheckpoint?.state === "saved") { fail.checkpoint = false; throw new Error("checkpoint failed"); } persisted = structuredClone(current); },
     createAd: (brief, research, execution) => createAd(brief, research, execution, artistDeps),
-    reviewAd: async variant => { counts.review++; if (fail.review) { fail.review = false; throw new Error("review failed"); } return { verdict: "pass", checks: codeChecks(variant, bytes.get(variant.id)!), createdAt: "now", visual: { productFidelity: pass, textLegibility: pass, claimAccuracy: pass, brandFit: pass, summary: "TEST FIXTURE ONLY" } }; },
+    reviewAd: async variant => { counts.review++; if (fail.review) { fail.review = false; throw new Error("review failed"); } return { verdict: "pass", checks: codeChecks(variant, bytes.get(variant.id)!), createdAt: "2026-09-22T06:00:00.000Z", visual: { productFidelity: pass, textLegibility: pass, claimAccuracy: pass, brandFit: pass, summary: "TEST FIXTURE ONLY" } }; },
   };
   let workflow = new Workflow(session, deps);
   const approve = async (input = makeBrief()) => { const brief = await workflow.proposeBrief(input); await workflow.approveBrief(brief.id); return brief; };
