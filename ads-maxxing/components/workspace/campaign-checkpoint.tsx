@@ -1,10 +1,11 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- Researched store photos have arbitrary remote hosts. */
 import { useId, useState } from "react";
-import type { Research, Session } from "@/lib/workflow/session-types";
+import type { Session } from "@/lib/workflow/session-types";
 import type { WorkflowAction } from "@/lib/workspace/api";
 import { memberReferenceReadiness, scopeForCampaign, type CampaignMember } from "@/lib/workflow/research/scope";
 import { Button } from "./ui";
+import { OfferChoices, offerIssue } from "./offer-choices";
 import "./checkpoint.css";
 
 export function CampaignCheckpoint({ session, busy, action }: {
@@ -77,13 +78,7 @@ export function CampaignCheckpoint({ session, busy, action }: {
     </div>
     <div className="checkpoint-section">
       <h3>Offer <span className="muted small">Optional</span></h3>
-      <label className="checkpoint-offer"><input type="radio" name={`${headingId}-offer`} checked={!saleId} disabled={busy || submitting} onChange={() => { setSaleId(null); setConfirmed(false); }} /> No offer</label>
-      {!offers.length && <p className="small muted">No supported offers found for this product.</p>}
-      {offers.map((offer) => <label className="checkpoint-offer" key={offer.id}>
-        <input type="radio" name={`${headingId}-offer`} checked={saleId === offer.id} disabled={busy || submitting || !!offerIssue(offer)} onChange={() => { setSaleId(offer.id); setConfirmed(false); }} />
-        <span><strong>{offer.displayCopy}</strong>{offer.restrictions && offer.restrictions !== offer.displayCopy && <small>Terms: {offer.restrictions}</small>}<small>Store wording: “{offer.quote}”</small>{offerIssue(offer) && <small className="checkpoint-offer-unavailable">{offerIssue(offer)} Research this offer again to use it.</small>}<small>Source: <a href={offer.sourceUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>{new URL(offer.sourceUrl).hostname}</a></small></span>
-      </label>)}
-      {saleId && <label className="checkpoint-confirm"><input type="checkbox" checked={confirmed} disabled={busy || submitting} onChange={(event) => setConfirmed(event.target.checked)} /> I confirm this offer is still valid, applies to this product, and the target customers meet all its terms.</label>}
+      <OfferChoices offers={offers} name={`${headingId}-offer`} saleId={saleId} setSaleId={setSaleId} confirmed={confirmed} setConfirmed={setConfirmed} busy={busy || submitting} label="Offers for this ad" />
     </div>
     <div className="checkpoint-submit"><Button primary disabled={busy || submitting || !intentId || !member || !selectedPhoto || (!!saleId && (!confirmed || !!selectedOfferUnavailable))} onClick={async () => {
       if (!intentId || !member || !selectedPhoto || (saleId && (!confirmed || selectedOfferUnavailable))) return;
@@ -92,13 +87,4 @@ export function CampaignCheckpoint({ session, busy, action }: {
       finally { setSubmitting(false); }
     }}>{submitting ? "Creating your ad…" : "Generate ad →"}</Button></div>
   </section>;
-}
-
-export function offerIssue(offer: NonNullable<Research["offers"]>[number]): string | null {
-  const now = Date.now();
-  const checked = Date.parse(offer.checkedAt);
-  if (offer.eligibility === "expired") return "Marked expired.";
-  if (!Number.isFinite(checked) || checked > now + 300_000 || now - checked > 86_400_000) return "Source check is over 24 hours old.";
-  if (offer.endsAt && (!Number.isFinite(Date.parse(offer.endsAt)) || Date.parse(offer.endsAt) <= now)) return "Offer has ended.";
-  return null;
 }

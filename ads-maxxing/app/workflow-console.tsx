@@ -12,6 +12,7 @@ import { BrandOnboarding } from "@/components/workspace/brand-onboarding";
 import { BrandSummaryView } from "@/components/workspace/brand-summary";
 import { CampaignWorkspace } from "@/components/workspace/campaign-workspace";
 import { Button } from "@/components/workspace/ui";
+import { Wordmark } from "@/components/workspace/brand-mark";
 
 type Target = { kind: "new" } | { kind: "session" | "brand"; id: string };
 function locationTarget(): Target {
@@ -83,7 +84,6 @@ export function WorkflowConsole() {
         nextBrand = await workspaceApi.brand(target.id);
         if (!nextBrand.ready && nextBrand.setupId) {
           nextSession = await workspaceApi.open(nextBrand.setupId);
-          nextBrand = null;
         }
       }
       if (version !== navigation.current) return;
@@ -307,23 +307,33 @@ export function WorkflowConsole() {
   }
   if (loading || loadFailed)
     return (
-      <main className="workspace-loading" role="status">
-        <h1>
-          {loading ? "Opening your workspace…" : "Couldn’t open your workspace"}
-        </h1>
-        {error && <p role="alert">{error}</p>}
-        {!loading && (
-          <Button
-            onClick={() => {
-              void lists()
-                .then(() => load(locationTarget(), false))
-                .catch((cause) => setError(cause.message));
-            }}
-          >
-            Retry
-          </Button>
-        )}
-      </main>
+      <div className="workspace chat-closed setup-workspace workspace-loading-shell">
+        <aside className="sidebar">
+          <Wordmark animated={loading} />
+          <p className="nav-label">YOUR BRANDS</p>
+          <nav aria-label="Saved brands">
+            {brands.map((item) => <span className="nav-item" key={item.id}>{item.name}</span>)}
+          </nav>
+        </aside>
+        <div className="workspace-main">
+          <header className="topbar"><div className="breadcrumb">Workspace <span>/</span><strong>Opening</strong></div></header>
+          <main className="main-scroll">
+            <div className="workspace-loading" role={loading ? "status" : undefined}>
+              <h1>{loading ? "Opening your workspace…" : "Couldn’t open your workspace"}</h1>
+              <p className="muted">{loading ? "Bringing back your saved brands and campaigns." : "Your saved work is still here. Try loading it again."}</p>
+              {error && <p role="alert">{error}</p>}
+              {!loading && (
+                <Button onClick={() => {
+                  setLoading(true);
+                  void lists()
+                    .then(() => load(locationTarget(), false))
+                    .catch((cause) => { setError(cause.message); setLoading(false); });
+                }}>Retry</Button>
+              )}
+            </div>
+          </main>
+        </div>
+      </div>
     );
   if (!brand && session?.purpose === "campaign" && session.research)
     return (
@@ -357,7 +367,7 @@ export function WorkflowConsole() {
   return (
     <div className="workspace chat-closed setup-workspace">
       <aside className="sidebar">
-        <span className="wordmark">◈ studio.</span>
+        <Wordmark />
         <p className="nav-label">YOUR BRANDS</p>
         <nav aria-label="Saved brands">
           {brands.map((item) => (
@@ -432,6 +442,20 @@ export function WorkflowConsole() {
               dirty={setDirty}
               start={(source) => void start(brand.id, brand.setupId, source)}
             />
+          ) : brand && !brand.ready && sessions.some((item) => item.purpose === "campaign" && item.brandId === brand.id) && session?.setup?.state !== "researching" && session?.setup?.state !== "needs_url" && !session?.operationActive ? (
+            <section className="brand-recovery">
+              <p className="eyebrow">SAVED BRAND</p>
+              <h1>{brand.name}</h1>
+              <p className="muted">This brand has a saved campaign, but its editable brand kit is not available yet. Open the campaign to continue working{session?.purpose === "brand_setup" ? ", or retry brand research" : ""}.</p>
+              {session?.setup?.error && <div className="error-box" role="alert">{session.setup.error}</div>}
+              <div className="actions">
+                <Button primary disabled={busy} onClick={() => {
+                  const campaign = sessions.find((item) => item.purpose === "campaign" && item.brandId === brand.id);
+                  if (campaign) void load({ kind: "session", id: campaign.id });
+                }}>Open saved campaign</Button>
+                {session?.purpose === "brand_setup" && <Button disabled={busy} onClick={() => void retry()}>Retry brand research</Button>}
+              </div>
+            </section>
           ) : (
             <BrandOnboarding
               key={session?.id || "new"}

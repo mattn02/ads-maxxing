@@ -18,6 +18,9 @@ import { CampaignCheckpoint } from "./campaign-checkpoint";
 import { CampaignDirection } from "./campaign-direction";
 import { CampaignProgress } from "./campaign-progress";
 import { CampaignProducts } from "./campaign-products";
+import { Wordmark } from "./brand-mark";
+import { WorkspaceIcon } from "./workspace-icon";
+import "./creative-workspace.css";
 type Section = "Ads" | "Brand";
 export function CampaignWorkspace({
   initial,
@@ -211,16 +214,14 @@ export function CampaignWorkspace({
   const starting = !!pendingGeneration && !session.researchState?.generationIntent && !session.variants.length;
   return (
     <div
-      className={`workspace ${visibleChat ? "" : "chat-closed"} ${visibleChat && mobileChat ? "show-chat" : ""}`}
+      className={`workspace creative-workspace ${visibleChat ? "" : "chat-closed"} ${visibleChat && mobileChat ? "show-chat" : ""}`}
       style={{ "--chat-width": `${chatWidth}px` } as CSSProperties}
     >
       <aside className="sidebar">
-        <Link className="wordmark" href="/" aria-label="Studio home">
-          <span>◈</span> studio<span className="wordmark-dot">.</span>
-        </Link>
+        <Link className="wordmark-link" href="/" aria-label="ads-maxxing home"><Wordmark /></Link>
         <div className="brand-identity">
           <span className="brand-avatar">
-            {name === "Your brand" ? "◇" : name[0].toUpperCase()}
+            {name === "Your brand" ? <WorkspaceIcon name="brand" size={17} /> : name[0].toUpperCase()}
           </span>
           <div>
             <strong>{name}</strong>
@@ -229,11 +230,12 @@ export function CampaignWorkspace({
         </div>
         <p className="nav-label">WORKSPACE</p>
         <nav aria-label="Workspace">
-          {(["Ads", "Brand"] as Section[]).map((s, i) => (
+          {(["Ads", "Brand"] as Section[]).map((s) => (
             <button
               key={s}
               disabled={busy}
               className={`nav-item ${section === s ? "selected" : ""}`}
+              aria-label={s}
               aria-current={section === s ? "page" : undefined}
               onClick={() => {
                 if (s === "Brand") {
@@ -245,8 +247,8 @@ export function CampaignWorkspace({
                 setMobileChat(false);
               }}
             >
-              <span aria-hidden="true">{["▦", "◈"][i]}</span>
-              {s}
+              <span aria-hidden="true"><WorkspaceIcon name={s === "Ads" ? "ads" : "brand"} /></span>
+              <span className="nav-item-label">{s}</span>
               {s === "Ads" && !!publishedVariants.length && (
                 <small>{publishedVariants.length}</small>
               )}
@@ -287,51 +289,51 @@ export function CampaignWorkspace({
               aria-expanded={chatOpen}
               onClick={() => setChatOpen(!chatOpen)}
             >
-              {chatOpen ? "Hide discussion" : "Refine this ad"} ☷
+              <WorkspaceIcon name="chat" size={16} /> {chatOpen ? "Hide discussion" : "Refine this ad"}
             </Button>
           </div>}
         </header>
         <div className="campaign-bar">
-          <label className="sr-only" htmlFor="brand-select">
-            Brand
-          </label>
-          <select
-            id="brand-select"
-            disabled={busy}
-            value={session.brandId || ""}
-            onChange={(event) => selectBrand(event.target.value)}
-          >
-            {brands.map((brand) => (
-              <option key={brand.id} value={brand.id}>
-                {brand.name}
+          <div className="campaign-bar-field">
+            <label htmlFor="brand-select">Brand</label>
+            <select
+              id="brand-select"
+              disabled={busy}
+              value={session.brandId || ""}
+              onChange={(event) => selectBrand(event.target.value)}
+            >
+              {brands.map((brand) => (
+                <option key={brand.id} value={brand.id}>
+                  {brand.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="campaign-bar-field">
+            <label htmlFor="campaign-select">Campaign</label>
+            <select
+              id="campaign-select"
+              disabled={busy}
+              value={session?.id || ""}
+              onChange={(e) => void open(e.target.value)}
+            >
+              <option value="" disabled>
+                Brand setup
               </option>
-            ))}
-          </select>
-          <label className="sr-only" htmlFor="campaign-select">
-            Saved campaign
-          </label>
-          <select
-            id="campaign-select"
-            disabled={busy}
-            value={session?.id || ""}
-            onChange={(e) => void open(e.target.value)}
-          >
-            <option value="" disabled>
-              Brand setup
-            </option>
-            {sessions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.id === session?.id
-                  ? session.preferences.campaignName || s.title
-                  : s.title}
-              </option>
-            ))}
-          </select>
+              {sessions.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.id === session?.id
+                    ? session.preferences.campaignName || s.title
+                    : s.title}
+                </option>
+              ))}
+            </select>
+          </div>
           <Button disabled={busy} onClick={newCampaign}>
-            + New campaign
+            <WorkspaceIcon name="plus" size={15} /> New campaign
           </Button>
           <Button disabled={busy} onClick={newBrand}>
-            + New brand
+            New brand
           </Button>
         </div>
         <main className="main-scroll">
@@ -384,7 +386,7 @@ export function CampaignWorkspace({
             <>
               <div className="actions view-links">
                 <Button disabled={busy} onClick={() => setView("research")}>
-                  Research findings
+                  Brand &amp; product findings
                 </Button>
                 {session.brief && (
                   <Button disabled={busy} onClick={openBrief}>Edit brief</Button>
@@ -422,7 +424,7 @@ export function CampaignWorkspace({
           )}
         </main>
       </div>
-      <aside className="chat-panel" aria-label="Creative partner">
+      <aside className="chat-panel" aria-label="mattGPT ad discussion">
         <div
           className="resize-handle"
           role="separator"

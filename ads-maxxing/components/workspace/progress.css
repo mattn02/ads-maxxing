@@ -1,0 +1,32 @@
+.run-progress { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); color: var(--text); overflow: hidden; }
+.run-progress__hero { display: grid; grid-template-columns: minmax(160px, 35%) minmax(0, 1fr); min-height: 250px; }
+.run-progress__art { position: relative; min-height: 250px; display: grid; place-items: center; overflow: hidden; background: var(--sky-soft); }
+.run-progress__mark { z-index: 1; }
+.run-progress__summary { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 13px; padding: 30px 32px; min-width: 0; }
+.run-progress__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; font-weight: 700; }
+.run-progress__state { color: var(--action); }
+.run-progress--needs_input .run-progress__state, .run-progress--retry .run-progress__state, .run-progress--failed .run-progress__state, .run-progress--paused .run-progress__state { color: var(--warning); }
+.run-progress--complete .run-progress__state { color: var(--success); }
+.run-progress__elapsed { margin: 0; padding: 4px 20px; color: var(--muted); font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
+.run-progress__summary h2 { font-size: clamp(21px, 2vw, 29px); letter-spacing: -.055em; line-height: 1.15; margin: 0; text-wrap: balance; }
+.run-progress__summary > p { max-width: 52ch; line-height: 1.55; color: var(--muted); }
+.run-progress__event { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; }
+.run-progress__event span { width: 6px; height: 6px; margin-top: 6px; flex: none; border-radius: 50%; background: var(--action); }
+.run-progress__steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
+.run-progress__step { display: flex; align-items: center; gap: 9px; min-height: 58px; padding: 12px 16px; border-right: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+.run-progress__step:last-child { border-right: 0; }
+.run-progress__step-symbol { display: grid; place-items: center; flex: none; width: 25px; height: 25px; border: 1px solid var(--border); border-radius: 50%; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.run-progress__step--complete { color: var(--text); }
+.run-progress__step--complete .run-progress__step-symbol { color: white; background: var(--success); border-color: var(--success); }
+.run-progress__step--current { color: var(--text); font-weight: 700; }
+.run-progress__step--current .run-progress__step-symbol { color: var(--action); border-color: var(--action); }
+.run-progress__source { display: flex; align-items: center; gap: 12px; padding: 13px 18px; border-top: 1px solid var(--border); background: var(--surface-muted); }
+.run-progress__source img { width: 48px; height: 58px; object-fit: contain; border-radius: 5px; background: white; border: 1px solid var(--border); }
+.run-progress__source span { display: block; font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.run-progress__source p { margin-top: 3px; color: var(--muted); font-size: 12px; }
+.run-progress__controls { padding: 16px 20px 20px; border-top: 1px solid var(--border); }
+.run-progress__controls .actions { margin: 0; }
+.run-progress__controls > .campaign-activity:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.run-progress__controls :focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+@media (max-width: 620px) { .run-progress__hero { grid-template-columns: 1fr; } .run-progress__art { min-height: 175px; } .run-progress__summary { padding: 23px 20px 27px; } .run-progress__steps { grid-template-columns: 1fr; } .run-progress__step { min-height: 42px; border-right: 0; border-bottom: 1px solid var(--border); } .run-progress__step:last-child { border-bottom: 0; } .run-progress:not(.run-progress--active) .run-progress__hero { min-height: 0; } .run-progress:not(.run-progress--active) .run-progress__art { min-height: 110px; } .run-progress:not(.run-progress--active) .run-progress__mark { transform: scale(.76); } .run-progress:not(.run-progress--active) .run-progress__summary { padding: 17px 20px 19px; } }
+@media (prefers-reduced-motion: reduce) { .run-progress *, .run-progress *::before, .run-progress *::after { animation: none !important; transition: none !important; } }

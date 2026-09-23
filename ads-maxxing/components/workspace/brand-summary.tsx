@@ -8,6 +8,7 @@ import type {
 import { Badge, Button } from "./ui";
 import { CampaignDirection } from "./campaign-direction";
 import type { GenerationSource } from "@/lib/workflow/generation-contracts";
+import "./onboarding.css";
 
 export function BrandSummaryView({
   brand,
@@ -77,7 +78,6 @@ export function BrandSummaryView({
       <p className="muted brand-positioning">
         {kit.overrides.valueProposition ?? kit.valueProposition.value ?? "Your brand is saved and ready for its first campaign."}
       </p>
-      {!editing && <CampaignDirection research={research} busy={busy || !brand.ready} generate={start} />}
       <div className="actions summary-actions">
         {!editing && (
           <Button
@@ -220,57 +220,25 @@ export function BrandSummaryView({
           </div>
         </form>
       ) : (
-        <details className="brand-foundation">
-          <summary>Brand kit · voice, audience & palette</summary>
-          <div className="card">
-            <Badge>{provenance("valueProposition")}</Badge>
-            <h2>Positioning</h2>
-            <p>
-              {kit.overrides.valueProposition ??
-                kit.valueProposition.value ??
-                "Not found. Add what makes your brand different."}
-            </p>
+        <section className="brand-foundation" aria-labelledby="brand-foundation-title">
+          <div className="foundation-heading">
+            <div><span className="eyebrow">SAVED BRAND KIT</span><h2 id="brand-foundation-title">What we know so far</h2></div>
+            <p className="small muted">Observed details come from your store. Inferences are creative starting points you can change.</p>
           </div>
-          <div className="findings-grid">
-            {(["voice", "audience"] as const).map((field) => (
-              <div className="card" key={field}>
-                <Badge>{provenance(field)}</Badge>
-                <h2>{field === "voice" ? "Voice" : "Audience"}</h2>
-                <p>{research[field] || "Not found. You can add this later."}</p>
-              </div>
-            ))}
-          </div>
-          <div className="card">
-            <h2>
-              Your palette{" "}
-              <Badge>
-                {kit.visualOverrides?.colors ? "Edited by you" : "Observed"}
-              </Badge>
-            </h2>
-            <div className="palette">
-              {kit.colors.map((color, index) => (
-                <div key={index}>
-                  <span style={{ backgroundColor: color.value }} />
-                  {color.role} · {color.value}
-                </div>
-              ))}
+          <div className="foundation-grid">
+            <div className="foundation-field"><div><span>Positioning</span><Badge>{provenance("valueProposition")}</Badge></div><p>{kit.overrides.valueProposition ?? kit.valueProposition.value ?? "Not found. Add what makes your brand different."}</p></div>
+            <div className="foundation-field"><div><span>Voice</span><Badge>{provenance("voice")}</Badge></div><p>{kit.overrides.voice ?? kit.voice.value ?? "Not found. Add how your brand sounds."}</p></div>
+            <div className="foundation-field"><div><span>Audience</span><Badge>{provenance("audience")}</Badge></div><p>{kit.overrides.audience ?? kit.audience.value ?? "Not found. Add who your brand speaks to."}</p></div>
+            <div className="foundation-field foundation-palette"><div><span>Palette</span><Badge>{kit.visualOverrides?.colors ? "Edited by you" : kit.colors.length ? "Observed" : "Not found"}</Badge></div>
+              {!!kit.colors.length ? <div className="palette">{kit.colors.map((color, index) => <div key={index}><span style={{ backgroundColor: color.value }} />{color.role} · {color.value}</div>)}</div> : <p>No palette found. You can add one in Edit brand.</p>}
             </div>
-            {!kit.colors.length && (
-              <p className="small muted">
-                No palette found. You can add one, or start with a neutral
-                palette.
-              </p>
-            )}
-            {!logo && (
-              <p className="small muted">
-                No logo selected. Creatives can proceed without one.
-              </p>
-            )}
           </div>
-        </details>
+          {!logo && <p className="small muted foundation-note">No logo selected. Creatives can proceed without one.</p>}
+        </section>
       )}
-      <details className="card">
-        <summary>Products, collections & sources</summary>
+      {!editing && <CampaignDirection research={research} busy={busy || !brand.ready} generate={start} />}
+      <details className="card brand-details">
+        <summary>Store links, typography & sources</summary>
         <p className="small muted">
           Links observed on your store. Product details and photos are
           researched after you choose a direction.

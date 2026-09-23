@@ -6,6 +6,8 @@ import type { ConciergeMessage } from "@/lib/workflow/agents/concierge";
 import type { Session, Variant } from "@/lib/workflow/session-types";
 import { groupVariants } from "@/lib/workspace/api";
 import { Badge, Button } from "./ui";
+import { BrandMark } from "./brand-mark";
+import { WorkspaceIcon } from "./workspace-icon";
 const toolLabels: Record<string, string> = {
   research: "Researching your brand",
   prepareBrief: "Preparing the creative brief",
@@ -46,10 +48,10 @@ export function ChatPanel({
   return (
     <>
       <div className="chat-heading">
-        {variant ? <Image src={variant.imageUrl} alt="" width={32} height={32} unoptimized className="chat-target-image" /> : <div className="partner-icon">✧</div>}
+        {variant ? <Image src={variant.imageUrl} alt="" width={40} height={56} unoptimized className="chat-target-image" /> : <div className="partner-icon"><BrandMark size={29} /></div>}
         <div>
-          <strong>{variant ? "Refine this ad" : "Creative partner"}</strong>
-          <p className="muted small">{variant ? `${variant.research.products?.find(product => product.id === variant.brief.productId)?.title ?? variant.brief.productUrl} · Version ${version + 1} of ${history?.length ?? 1}` : "A little direction. A lot of ideas."}</p>
+          <strong>mattGPT</strong>
+          <p className="muted small">{variant ? `Refining ${variant.research.products?.find(product => product.id === variant.brief.productId)?.title ?? variant.brief.productUrl} · Version ${version + 1} of ${history?.length ?? 1}` : "Your creative collaborator"}</p>
         </div>
       </div>
       <div className="chat-messages" aria-label="Conversation">
@@ -62,7 +64,7 @@ export function ChatPanel({
         {messages.map((m) => (
           <div key={m.id} className={`message ${m.role}`}>
             <span className="message-author">
-              {m.role === "user" ? "YOU" : "CREATIVE PARTNER"}
+              {m.role === "user" ? "You" : "mattGPT"}
             </span>
             {m.parts.map((p, i) => {
               if (p.type === "text")
@@ -162,7 +164,7 @@ export function ChatPanel({
         }}
       >
         <label className="sr-only" htmlFor="chat-message">
-          Message your creative partner
+          Message mattGPT
         </label>
         <textarea
           id="chat-message"
@@ -181,7 +183,7 @@ export function ChatPanel({
             disabled={busy || !input.trim()}
             aria-label="Send message"
           >
-            ↑
+            <WorkspaceIcon name="send" size={17} />
           </Button>
         </div>
       </form>

@@ -3,6 +3,7 @@ import { useId, useState } from "react";
 import type { Research } from "@/lib/workflow/session-types";
 import type { GenerationSource } from "@/lib/workflow/generation-contracts";
 import { Button } from "./ui";
+import "./onboarding.css";
 
 function isCollectionUrl(url?: string) {
   if (!url) return false;

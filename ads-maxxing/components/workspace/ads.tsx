@@ -14,7 +14,9 @@ import {
   type WorkflowAction,
 } from "@/lib/workspace/api";
 import { Badge, Button, EmptyState, SectionHeading } from "./ui";
-import { offerIssue } from "./campaign-checkpoint";
+import { OfferChoices, offerIssue } from "./offer-choices";
+import { AdPreviewImage } from "./ad-preview-image";
+import { AdSourceReference } from "./ad-source-reference";
 export function CampaignForm({
   session,
   busy,
@@ -392,6 +394,7 @@ export function AdsView({
               alt={`Version ${versionNumber}: ${variant.brief.headline}`}
               priority
             />
+            <AdSourceReference variant={variant} />
           </div>
           <div>
             <div className="card">
@@ -442,9 +445,7 @@ export function AdsView({
                 Download image ↓
               </a>
               <details className="ad-review-evidence" open={variant.review?.verdict !== "pass"}>
-                <summary>Original photo & review details</summary>
-                <img className="reference" src={variant.sourceAssetId ? `/api/assets/${variant.sourceAssetId}` : variant.referenceImage} alt="Saved original product for comparison" />
-                <p className="small muted">Compare the shape, colors, branding, and visible product details.</p>
+                <summary>Review details</summary>
                 {variant.review?.checks.map((check) => <p className="small" key={check.name}>{check.passed ? "✓" : "!"} <strong>{check.name}</strong> — {check.detail}</p>)}
               </details>
             </div>
@@ -551,34 +552,6 @@ export function AdsView({
   );
 }
 
-function AdPreviewImage({ src, alt, frameClassName, priority = false }: {
-  src: string;
-  alt: string;
-  frameClassName: string;
-  priority?: boolean;
-}) {
-  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
-  return (
-    <div className={`ad-image-frame ${frameClassName} is-${state}`}>
-      {state !== "ready" && (
-        <span className="ad-image-state" role={state === "error" ? "alert" : "status"}>
-          {state === "error" ? "Preview unavailable" : "Loading preview…"}
-        </span>
-      )}
-      <img
-        src={src}
-        alt={alt}
-        width={576}
-        height={1024}
-        loading={priority ? "eager" : "lazy"}
-        fetchPriority={priority ? "high" : "auto"}
-        onLoad={() => setState("ready")}
-        onError={() => setState("error")}
-      />
-    </div>
-  );
-}
-
 function ChangeOffer({ variant, session, busy, action }: {
   variant: Variant;
   session: Session;
@@ -595,15 +568,7 @@ function ChangeOffer({ variant, session, busy, action }: {
   return <details className="card ad-offer">
     <summary>Change offer{currentOffer ? ` · ${currentOffer.displayCopy}` : " · No offer"}</summary>
     <p className="small muted">Choose an offer for a new ad version. The current version stays available.</p>
-    <div role="group" aria-label="Offers for this ad">
-      {!offers.length && <p className="small muted">No supported offers found for this product.</p>}
-      <label className="checkpoint-offer"><input type="radio" name={`offer-${variant.id}`} checked={!saleId} disabled={busy || submitting} onChange={() => { setSaleId(null); setConfirmed(false); }} /> No offer</label>
-      {offers.map((offer) => <label className="checkpoint-offer" key={offer.id}>
-        <input type="radio" name={`offer-${variant.id}`} checked={saleId === offer.id} disabled={busy || submitting || !!offerIssue(offer)} onChange={() => { setSaleId(offer.id); setConfirmed(false); }} />
-        <span><strong>{offer.displayCopy}</strong>{offer.restrictions && offer.restrictions !== offer.displayCopy && <small>Terms: {offer.restrictions}</small>}<small>Store wording: “{offer.quote}”</small>{offerIssue(offer) && <small className="checkpoint-offer-unavailable">{offerIssue(offer)} Research this offer again to use it.</small>}<small>Source: <a href={offer.sourceUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>{new URL(offer.sourceUrl).hostname}</a></small></span>
-      </label>)}
-    </div>
-    {saleId && <label className="checkpoint-confirm"><input type="checkbox" checked={confirmed} disabled={busy || submitting} onChange={(event) => setConfirmed(event.target.checked)} /> I confirm this offer is still valid, applies to this product, and the target customers meet all its terms.</label>}
+    <OfferChoices offers={offers} name={`offer-${variant.id}`} saleId={saleId} setSaleId={setSaleId} confirmed={confirmed} setConfirmed={setConfirmed} busy={busy || submitting} label="Offers for this ad" />
     <Button disabled={busy || submitting || saleId === (variant.brief.saleId ?? null) || (!!saleId && (!confirmed || !!selectedOfferUnavailable))} onClick={async () => {
       if (saleId === (variant.brief.saleId ?? null) || (saleId && (!confirmed || selectedOfferUnavailable))) return;
       setSubmitting(true);

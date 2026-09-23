@@ -6,6 +6,7 @@ import {
   type CampaignMember,
 } from "@/lib/workflow/research/scope";
 import { Badge, Button } from "./ui";
+import { WorkspaceIcon } from "./workspace-icon";
 
 
 function formatPrice(price: NonNullable<NonNullable<Research["products"]>[number]["price"]>) {
@@ -84,7 +85,7 @@ export function CampaignProducts({ research, busy, plan }: {
                     loading="lazy"
                   />
                 ) : (
-                  <span aria-hidden="true">◇</span>
+                  <span aria-hidden="true"><WorkspaceIcon name="ads" size={26} /></span>
                 )}
               </div>
               <div className="campaign-product-content">

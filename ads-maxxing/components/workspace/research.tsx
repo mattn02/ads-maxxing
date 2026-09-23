@@ -3,90 +3,7 @@ import { useState } from "react";
 import type { WorkflowAction } from "@/lib/workspace/api";
 import type { Session } from "@/lib/workflow/session-types";
 import { Badge, Button, EmptyState, SectionHeading } from "./ui";
-export function Onboarding({
-  busy,
-  submit,
-}: {
-  busy: boolean;
-  submit: (text: string) => void;
-}) {
-  const [url, setUrl] = useState("");
-  return (
-    <div className="onboarding">
-      <div className="eyebrow">YOUR NEXT GREAT AD STARTS HERE</div>
-      <h1>
-        A little research.
-        <br />A lot of possibility.
-      </h1>
-      <p className="intro">
-        Turn your store into a creative starting point.
-        <br />
-        We’ll get to know your brand and find your real product photos.
-      </p>
-      <form
-        className="url-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit(
-            `Research ${url}. Save findings and wait for my next instruction. Do not generate an ad.`,
-          );
-        }}
-      >
-        <label htmlFor="store-url">Store or product URL</label>
-        <div className="url-row">
-          <input
-            id="store-url"
-            type="url"
-            required
-            placeholder="https://your-store.com"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            disabled={busy}
-          />
-          <Button primary disabled={busy}>
-            {busy ? "Researching…" : "Research brand →"}
-          </Button>
-        </div>
-        <button
-          type="button"
-          className="text-button"
-          disabled={busy}
-          onClick={() => setUrl("https://www.loopycases.com")}
-        >
-          Try with Loopy Cases ↗
-        </button>
-      </form>
-      <div className="steps">
-        {[
-          [
-            "01",
-            "Get to know your brand",
-            "Products, imagery, and what makes you different.",
-          ],
-          [
-            "02",
-            "Choose your direction",
-            "Shape a brief together before anything is generated.",
-          ],
-          [
-            "03",
-            "Make it your own",
-            "Review, refine, and approve your next ad.",
-          ],
-        ].map(([n, title, text]) => (
-          <div key={n}>
-            <span>{n}</span>
-            <h3>{title}</h3>
-            <p>{text}</p>
-          </div>
-        ))}
-      </div>
-      <p className="fine-print">
-        Your approval comes before image generation. Always.
-      </p>
-    </div>
-  );
-}
+import "./onboarding.css";
 export function ResearchView({ session, busy, create, action }: {
   session: Session; busy: boolean; create: () => void; action: (body: WorkflowAction) => Promise<unknown>;
 }) {
@@ -94,38 +11,48 @@ export function ResearchView({ session, busy, create, action }: {
   const awaiting = session.researchState?.stage === "awaiting_direction";
   const selected = research.campaign?.selectedProductId;
   const choosingProduct = session.researchState?.stage === "needs_selection" && !selected;
-  const campaignProductIds = research.campaign?.productIds
-    ? new Set(research.campaign.productIds)
-    : null;
-  const products = campaignProductIds
-    ? (research.products || []).filter((product) => campaignProductIds.has(product.id))
-    : research.products || [];
+  const campaignProductIds = research.campaign?.productIds ? new Set(research.campaign.productIds) : null;
+  const products = campaignProductIds ? (research.products || []).filter((product) => campaignProductIds.has(product.id)) : research.products || [];
   const run = research.runs?.at(-1);
-  return <>
-    <SectionHeading eyebrow="A CREATIVE STARTING POINT" title={research.brandKit?.name || "Meet your brand"}><Badge>{awaiting ? "Choose a direction" : "Research findings"}</Badge></SectionHeading>
-    <div className="notice">{awaiting ? "Your brand kit is saved. Choose what to promote before we research product photos." : research.campaign?.status === "needs_selection" ? "Choose a product to focus this campaign. This is a shortlist, not the complete catalog." : "Review the real product and its photo before preparing your ad."}</div>
-    {awaiting && <div className="card"><h2>Choose what to promote</h2><p>Choose a suggested campaign, describe your idea, or share a product URL.</p><Button onClick={create}>Choose a campaign →</Button></div>}
-    {!!products.length && <><h2>{choosingProduct ? "Choose a product" : "Products"} <span className="muted">{products.length} researched</span></h2>{choosingProduct && <p className="muted">Select the product you want to feature. We won’t prepare the ad until you choose.</p>}<div className="source-grid">{products.map(product => <div className="card source-card" key={product.id}>
-      <h3>{product.title}</h3><p>{product.description}</p><a href={product.canonicalUrl} target="_blank" rel="noreferrer">View source ↗</a>
-      {product.price && <p>{product.price.currency} {product.price.amount} · observed price</p>}
-      <div className="images">{research.assets?.filter(asset => product.assetIds.includes(asset.id) && asset.eligibleAsProductReference).map(asset => <img key={asset.id} src={asset.originalUrl} alt={`Source photo of ${product.title}`} loading="lazy" />)}</div>
-      {!research.assets?.some(asset => product.assetIds.includes(asset.id) && asset.eligibleAsProductReference) && <p className="notice">No verified Shopify gallery image was found for this product.</p>}
-      <p className="small muted">{product.variants.length ? `${product.variants.length} evidenced variants` : "Variant not established; do not assume a specific size or model."}</p>
-      <Button primary={choosingProduct && selected !== product.id} disabled={busy || selected === product.id} onClick={() => void action({ action: "selectProduct", productId: product.id })}>{selected === product.id ? "Selected product" : "Choose this product →"}</Button>
-    </div>)}</div></>}
-    <div className="findings-grid">
-      <div className="card"><Badge>{research.brandKit?.overrides.voice ? "User supplied" : "Inferred"}</Badge><h3>Brand voice</h3><p>{research.voice}</p></div>
-      <div className="card"><Badge>{research.brandKit?.overrides.audience ? "User supplied" : "Inferred"}</Badge><h3>Suggested audience</h3><p>{research.audience}</p></div>
-    </div>
+  const excludedImages = research.assets?.filter((asset) => !asset.eligibleAsProductReference && asset.role !== "logo") || [];
+  const provenance = (field: "voice" | "audience") => {
+    const finding = research.brandKit?.[field];
+    if (research.brandKit?.overrides[field]) return "Edited by you";
+    if (!finding || finding.status === "not_found" || finding.status === "not_checked") return "Not found";
+    if (finding.status === "failed") return "Unavailable";
+    return finding.evidence?.origin === "observed" ? "Observed" : "Inferred";
+  };
+  return <div className="research-screen">
+    <SectionHeading eyebrow="YOUR BRAND’S VIBE" title={research.brandKit?.name || "Your brand research"}><Badge>{awaiting ? "Choose a direction" : "Research findings"}</Badge></SectionHeading>
+    <p className="research-intro">{awaiting ? "Your brand kit is saved. Choose what to promote and mattGPT will find the product photos." : research.campaign?.status === "needs_selection" ? "Choose the product to feature from this researched shortlist." : "Review the real product and its photo before preparing your ad."}</p>
+    {awaiting && <section className="card research-next"><span className="eyebrow">NEXT STEP</span><h2>Choose what to promote</h2><p className="muted">Start with a store suggestion, your own idea, or a product URL.</p><Button primary onClick={create}>Choose a direction →</Button></section>}
+    {!!products.length && <section aria-labelledby="research-products-title">
+      <h2 id="research-products-title">{choosingProduct ? "Choose a product" : "Researched products"} <span className="muted">· {products.length}</span></h2>
+      {choosingProduct && <p className="muted">Your choice determines which product photo the ad can use.</p>}
+      <div className="source-grid">{products.map((product) => {
+        const photos = research.assets?.filter((asset) => product.assetIds.includes(asset.id) && asset.eligibleAsProductReference) || [];
+        return <article className="card source-card" key={product.id}>
+          <div className="images">{photos.map((asset) => <img key={asset.id} src={asset.originalUrl} alt={`Source photo of ${product.title}`} loading="lazy" />)}</div>
+          {!photos.length && <p className="notice">No verified Shopify gallery image was found for this product.</p>}
+          <h3>{product.title}</h3><p>{product.description}</p>
+          {product.price && <p className="small muted">{product.price.currency} {product.price.amount} · observed price</p>}
+          <p className="small muted">{product.variants.length ? `${product.variants.length} evidenced variants` : "Variant not established; size or model will not be assumed."}</p>
+          <div className="research-product-actions"><a href={product.canonicalUrl} target="_blank" rel="noreferrer">View source ↗</a><Button primary={choosingProduct && selected !== product.id} disabled={busy || selected === product.id} onClick={() => void action({ action: "selectProduct", productId: product.id })}>{selected === product.id ? "Selected product" : "Choose product →"}</Button></div>
+        </article>;
+      })}</div>
+    </section>}
     {selected && <div className="card next-step"><div><h2>Product saved to your campaign</h2><p>Your real product photos are the starting point for the creative.</p></div><Button primary disabled={busy} onClick={create}>View campaign →</Button></div>}
-    <details className="card"><summary>Unsorted and excluded images · {research.assets?.filter(asset => !asset.eligibleAsProductReference && asset.role !== "logo").length || 0}</summary>
-      <p className="muted">These store images are shown for reference but are never selected for generation because Shopify did not associate them with the product.</p>
-      <div className="asset-grid">{research.assets?.filter(asset => !asset.eligibleAsProductReference && asset.role !== "logo").slice(0, 36).map(asset => <div className="card asset" key={asset.id}><img src={asset.originalUrl} alt="Unsorted store image" loading="lazy"/><Badge>{asset.role}</Badge></div>)}</div>
-    </details>
-    <details className="card"><summary>Offers and customer evidence</summary><p>Choose an offer at the product checkpoint, or use Change offer beside an existing ad. You’ll confirm its product and customer restrictions there.</p>{research.offers?.map(offer => <p key={offer.id}>{offer.quote} <Badge>{offer.eligibility}</Badge><br/><a href={offer.sourceUrl} target="_blank" rel="noreferrer">Source ↗</a> · checked {new Date(offer.checkedAt).toLocaleDateString()}</p>)}{!research.offers?.length && <p className="muted">No supported offer found. Evergreen product ads can proceed.</p>}{research.customerEvidence?.map(item => <p key={item.id}><Badge>{item.kind}</Badge> {item.value} · {item.productId ? "Product-scoped" : "Company-scoped"} <a href={item.evidence.sourceUrl} target="_blank" rel="noreferrer">Source ↗</a></p>)}{!research.customerEvidence?.length && <p className="muted">No customer evidence found. No rating or testimonial will be invented.</p>}</details>
-    <details className="card"><summary>Research coverage and sources</summary><p>{run ? `${run.scope} stage · ${run.status} · ${run.attemptedUrls.length} pages attempted · ${run.failedUrls.length} unavailable` : research.schemaVersion === 2 ? "Brand context saved. Choose a direction to begin product research." : "Legacy research: refresh a product before making a new brief."}</p>{research.sources.map(source => <p key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.title} ↗</a> · {new Date(source.fetchedAt).toLocaleString()}</p>)}</details>
-    {research.warnings.map(warning => <p className="notice" key={warning}>{warning}</p>)}
-  </>;
+    <section className="research-brand-notes" aria-labelledby="research-brand-notes-title"><h2 id="research-brand-notes-title">Brand notes</h2><div className="findings-grid">
+      <div className="card"><Badge>{provenance("voice")}</Badge><h3>Voice</h3><p>{research.brandKit?.overrides.voice ?? research.brandKit?.voice.value ?? research.voice ?? "Not found"}</p></div>
+      <div className="card"><Badge>{provenance("audience")}</Badge><h3>Audience</h3><p>{research.brandKit?.overrides.audience ?? research.brandKit?.audience.value ?? research.audience ?? "Not found"}</p></div>
+    </div></section>
+    <div className="research-evidence-group">
+      <details className="card research-evidence"><summary>Offers and customer evidence</summary><p>Choose an offer at the product checkpoint, or use Change offer beside an existing ad. You’ll confirm its product and customer restrictions there.</p>{research.offers?.map((offer) => <p key={offer.id}>{offer.quote} <Badge>{offer.eligibility}</Badge><br /><a href={offer.sourceUrl} target="_blank" rel="noreferrer">Source ↗</a> · checked {new Date(offer.checkedAt).toLocaleDateString()}</p>)}{!research.offers?.length && <p className="muted">No supported offer found. An evergreen product ad can still proceed.</p>}{research.customerEvidence?.map((item) => <p key={item.id}><Badge>{item.kind}</Badge> {item.value} · {item.productId ? "Product-scoped" : "Company-scoped"} <a href={item.evidence.sourceUrl} target="_blank" rel="noreferrer">Source ↗</a></p>)}{!research.customerEvidence?.length && <p className="muted">No customer evidence found. No rating or testimonial will be invented.</p>}</details>
+      <details className="card research-evidence"><summary>Excluded store images · {excludedImages.length}</summary><p className="muted">These images are visible for reference but cannot be used for generation because Shopify did not associate them with the product.</p><div className="asset-grid">{excludedImages.slice(0, 36).map((asset) => <div className="card asset" key={asset.id}><img src={asset.originalUrl} alt="Unsorted store image" loading="lazy" /><Badge>{asset.role}</Badge></div>)}</div></details>
+      <details className="card research-evidence"><summary>Research coverage and sources</summary><p>{run ? `${run.scope} stage · ${run.status} · ${run.attemptedUrls.length} pages attempted · ${run.failedUrls.length} unavailable` : research.schemaVersion === 2 ? "Brand context saved. Choose a direction to begin product research." : "Legacy research: refresh a product before making a new brief."}</p>{research.sources.map((source) => <p key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.title} ↗</a> · {new Date(source.fetchedAt).toLocaleString()}</p>)}</details>
+    </div>
+    {research.warnings.map((warning) => <p className="notice research-warning" key={warning}>{warning}</p>)}
+  </div>;
 }
 export function BrandView({ session, action }: { session: Session | null; action: (body: WorkflowAction) => Promise<unknown> }) {
   const [field, setField] = useState<"voice" | "audience" | "valueProposition">("voice");
