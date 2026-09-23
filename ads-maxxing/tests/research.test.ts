@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { research } from "../lib/workflow/agents/researcher";
+import { hasEvidence, research } from "../lib/workflow/agents/researcher";
 import { readFile } from "node:fs/promises";
 import { normalizeScrape, snapshotHtml } from "../lib/workflow/firecrawl";
 import { extractSource, assetKey, canonicalUrl, pageHint } from "../lib/workflow/research/extract";
@@ -36,6 +36,24 @@ test("homepage-only stage saves reusable branding and never follows a product li
   assert.equal(result.assets!.filter(asset => asset.eligibleAsProductReference).length, 0);
   assert.equal(checkpoints.length, 1); assert.notEqual(checkpoints[0], result.id);
   assert.equal(parseResearchSnapshot(result, 2).schemaVersion, 2);
+});
+
+test("research produces clean offer display fields before persistence and retains exact evidence", async () => {
+  const quote = "###### Use code **PROTECT** to get **25% off** camera and/or screen tempered glass **with a Loopy Case purchase.**";
+  const expected = "Use code PROTECT to get 25% off camera and/or screen tempered glass with a Loopy Case purchase.";
+  const result = await research(input(), {}, {
+    ...deps([]),
+    scrape: async (url: string) => ({ ...source(url), markdown: quote }),
+    synthesize: async () => ({ voice: "Friendly", audience: "Phone owners", sales: [{ sourceUrl: home, quote, description: quote }] }),
+  });
+  assert.equal(result.sales[0].description, expected);
+  assert.equal(result.offers![0].displayCopy, expected);
+  assert.equal(result.offers![0].restrictions, expected);
+  assert.equal(result.sales[0].quote, quote);
+  assert.equal(result.offers![0].quote, quote);
+  assert.equal(result.offers![0].eligibility, "unresolved");
+  assert.equal(hasEvidence(result.sales[0], result.sources), true);
+  assert.deepEqual(parseResearchSnapshot(result, 2).offers, result.offers);
 });
 
 test("direct product scope gets missing brand context, structured product, and exact gallery", async () => {

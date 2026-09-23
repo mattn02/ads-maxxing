@@ -5,7 +5,7 @@ import { brandTokensSchema, creativeFontFamily, designSchema, type BrandTokens }
 import { emojiImages, graphemes, textRuns } from "./emoji";
 import { loadCreativeFont } from "./fonts";
 import { formatProductPrice, selectedProductPrice } from "../research/prices";
-import { plainOffer } from "./offer-copy";
+import { plainOffer } from "../research/offer-copy";
 
 class CopyFitError extends WorkflowError {}
 

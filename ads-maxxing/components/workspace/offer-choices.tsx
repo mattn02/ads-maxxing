@@ -32,7 +32,7 @@ export function OfferChoices({ offers, name, saleId, setSaleId, confirmed, setCo
       const issue = offerIssue(offer);
       return <label className="checkpoint-offer" key={offer.id}>
         <input type="radio" name={name} checked={saleId === offer.id} disabled={busy || !!issue} onChange={() => choose(offer.id)} />
-        <span><strong>{offer.displayCopy}</strong>{offer.restrictions && offer.restrictions !== offer.displayCopy && <small>Terms: {offer.restrictions}</small>}<small>Store wording: “{offer.quote}”</small>{issue && <small className="checkpoint-offer-unavailable">{issue} Research this offer again to use it.</small>}<small>Source: <a href={offer.sourceUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>{new URL(offer.sourceUrl).hostname}</a></small></span>
+        <span><strong>{offer.displayCopy}</strong>{offer.restrictions && offer.restrictions !== offer.displayCopy && <small>Terms: {offer.restrictions}</small>}<small>Store wording: “{offer.displayCopy}”</small>{issue && <small className="checkpoint-offer-unavailable">{issue} Research this offer again to use it.</small>}<small>Source: <a href={offer.sourceUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>{new URL(offer.sourceUrl).hostname}</a></small></span>
       </label>;
     })}
     {saleId && <label className="checkpoint-confirm"><input type="checkbox" checked={confirmed} disabled={busy} onChange={(event) => setConfirmed(event.target.checked)} /> I confirm this offer is still valid, applies to this product, and the target customers meet all its terms.</label>}
