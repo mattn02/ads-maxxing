@@ -3,6 +3,7 @@ import https from "node:https";
 import type { Source } from "../session-types";
 import { publicAddress } from "../asset-download";
 import { productIdentityUrl } from "./extract";
+import { MAX_RESEARCH_ASSETS } from "./limits";
 import { WorkflowError } from "../validation";
 
 const MAX_BYTES = 512_000;
@@ -44,7 +45,7 @@ function compactProduct(product: Record<string, unknown>) {
   const image = (value: unknown) => typeof value === "string" ? value : Object.fromEntries(["id", "src", "url", "variant_ids"].filter(key => record(value)[key] !== undefined).map(key => [key, record(value)[key]]));
   return {
     id: product.id, handle: product.handle, title: plainText(product.title), description: plainText(product.description), options: product.options,
-    images: Array.isArray(product.images) ? product.images.map(image) : [], featured_image: image(product.featured_image),
+    images: Array.isArray(product.images) ? product.images.slice(0, MAX_RESEARCH_ASSETS).map(image) : [], featured_image: image(product.featured_image),
     variants: Array.isArray(product.variants) ? product.variants.map(value => {
       const variant = record(value);
       return { ...Object.fromEntries(["id", "title", "options", "option1", "option2", "option3", "image_id", "available"].filter(key => variant[key] !== undefined).map(key => [key, variant[key]])), featured_image: image(variant.featured_image), featured_media: { preview_image: image(record(variant.featured_media).preview_image) } };
@@ -79,6 +80,5 @@ export async function fetchShopifyProductSource(input: string, options: { shopif
   }
   const compact = compactProduct(product), fetchedAt = new Date().toISOString();
   const images = (compact.images as unknown[]).flatMap(value => { const url = typeof value === "string" ? value : record(value).src || record(value).url; try { return typeof url === "string" ? [new URL(url, canonical).href] : []; } catch { return []; } });
-  return { url: canonical.href, requestedUrl: input, finalUrl: canonical.href, title: compact.title, description: compact.description.slice(0, 4000), markdown: `${compact.title}\n\n${compact.description}`, images: [...new Set(images)], colors: {}, links: [], pageType: "product", fetchedAt, shopify: { url: endpoint.href, fetchedAt, product: compact } };
+  return { url: canonical.href, requestedUrl: input, finalUrl: canonical.href, title: compact.title, description: compact.description.slice(0, 4000), markdown: `${compact.title}\n\n${compact.description}`, images: [...new Set(images)].slice(0, MAX_RESEARCH_ASSETS), colors: {}, links: [], pageType: "product", fetchedAt, shopify: { url: endpoint.href, fetchedAt, product: compact } };
 }
-

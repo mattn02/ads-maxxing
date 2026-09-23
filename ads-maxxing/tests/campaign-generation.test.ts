@@ -113,9 +113,15 @@ function twoProducts(research: Research) {
   research.campaign!.selectedProductId = null; research.campaign!.status = "needs_selection";
 }
 
-test("multi-product Generate picks a ready hero and a later member ad retains the whole campaign", async () => {
+test("multi-product Generate pauses for an explicit product choice and retains the whole campaign", async () => {
   const h = fixture(twoProducts), id = randomUUID();
   await h.workflow.generateCampaign(id, input);
+  assert.equal(h.workflow.session.researchState!.stage, "needs_selection");
+  assert.equal(h.workflow.session.research!.campaign!.selectedProductId, null);
+  assert.equal(publicSession(h.workflow.session).nextAction?.kind, "needs_input");
+  assert.equal(h.counts.draft, 0);
+  const first = h.workflow.session.research!.products![0];
+  await h.workflow.selectProduct(first.id);
   assert.equal(h.workflow.session.researchState!.stage, "ready_for_brief");
   assert.equal(h.workflow.session.research!.campaign!.scope!.members.length, 2);
   await h.reload().continueCampaign(id); await h.reload().continueCampaign(id);
@@ -140,6 +146,9 @@ test("generic size/color variants require their exact photo and preserve explici
     research.campaign!.selectedProductId = null; research.campaign!.status = "needs_selection";
   });
   const id = randomUUID(); await h.workflow.generateCampaign(id, input);
+  assert.equal(h.workflow.session.research!.campaign!.selectedProductId, null);
+  assert.equal(publicSession(h.workflow.session).nextAction?.kind, "needs_input");
+  await h.workflow.selectCampaignMember(h.workflow.session.research!.products![0].id, "small-red");
   assert.equal(h.workflow.session.research!.campaign!.selectedVariantId, "small-red");
   const productId = h.workflow.session.research!.products![0].id;
   await assert.rejects(h.workflow.setCampaignScope([{ productId, variantId: "invented" }]), /actual variant/);
@@ -191,7 +200,9 @@ test("human acceptance retains uncertain automated review and is revoked on a fr
 });
 
 test("refining an older ad keeps current membership, direction and compatible saved scene", async () => {
-  const h = fixture(twoProducts), id = randomUUID(); await h.workflow.generateCampaign(id, input); await h.reload().continueCampaign(id); await h.reload().continueCampaign(id);
+  const h = fixture(twoProducts), id = randomUUID(); await h.workflow.generateCampaign(id, input);
+  await h.workflow.selectProduct(h.workflow.session.research!.products![0].id);
+  await h.reload().continueCampaign(id); await h.reload().continueCampaign(id);
   const original = structuredClone(h.workflow.session.variants[0]), research = h.workflow.session.research!;
   await h.workflow.selectCampaignMember(research.products![1].id, null);
   const members = structuredClone(h.workflow.session.research!.campaign!.scope!.members), direction = structuredClone(h.workflow.session.research!.campaign!.direction);
@@ -224,7 +235,9 @@ test("manual photo classification cannot replace missing Shopify ownership", asy
 });
 
 test("editing research or target cannot discard an unknown paid attempt and silently resubmit", async () => {
-  const h = fixture(twoProducts), id = randomUUID(); await h.workflow.generateCampaign(id, input); await h.reload().continueCampaign(id);
+  const h = fixture(twoProducts), id = randomUUID(); await h.workflow.generateCampaign(id, input);
+  await h.workflow.selectProduct(h.workflow.session.research!.products![0].id);
+  await h.reload().continueCampaign(id);
   h.fail.scene = true; await h.reload().continueCampaign(id);
   const before = structuredClone(h.workflow.session), research = before.research!, member = research.campaign!.scope!.members[1], asset = research.assets!.find(item => item.productIds.includes(member.productId))!;
   await assert.rejects(h.workflow.setCampaignScope([member]), /unfinished image attempt/);

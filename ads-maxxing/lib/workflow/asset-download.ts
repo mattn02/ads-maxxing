@@ -5,6 +5,8 @@ import { isIP } from "node:net";
 import { WorkflowError } from "./validation";
 
 const MAX_BYTES = 20 * 1024 * 1024;
+const MAX_PIXELS = 40_000_000;
+const LOGO_MAX_EDGE = 1200;
 export function publicAddress(address: string): boolean {
   if (isIP(address) === 6) {
     // Only ordinary global unicast IPv6. Exclude mapped IPv4, local, multicast and transition ranges.
@@ -15,7 +17,7 @@ export function publicAddress(address: string): boolean {
   if (p.length !== 4 || p.some(n => !Number.isInteger(n) || n < 0 || n > 255)) return false;
   return !(p[0] === 0 || p[0] === 10 || p[0] === 127 || p[0] >= 224 || (p[0] === 169 && p[1] === 254) || (p[0] === 172 && p[1] >= 16 && p[1] <= 31) || (p[0] === 192 && [0,168].includes(p[1])) || (p[0] === 100 && p[1] >= 64 && p[1] <= 127) || (p[0] === 198 && [18,19,51].includes(p[1])) || (p[0] === 203 && p[1] === 0));
 }
-export async function downloadImage(input: string, provider = false, limits: { maxBytes?: number; timeoutMs?: number } = {}): Promise<Buffer> {
+export async function downloadImage(input: string, provider = false, limits: { maxBytes?: number; timeoutMs?: number; convertSvg?: boolean } = {}): Promise<Buffer> {
   const maxBytes = Math.max(1, Math.min(MAX_BYTES, limits.maxBytes ?? MAX_BYTES));
   const deadline = Date.now() + Math.max(1, Math.min(30000, limits.timeoutMs ?? 30000));
   let url = new URL(input);
@@ -42,7 +44,9 @@ export async function downloadImage(input: string, provider = false, limits: { m
     if (response.statusCode !== 200 || Number(response.headers["content-length"] ?? 0) > maxBytes) { response.destroy(); throw new WorkflowError("Image is unavailable or exceeds the configured download limit."); }
     const chunks: Buffer[] = []; let size = 0;
     for await (const chunk of response) { const bytes = Buffer.from(chunk); size += bytes.length; if (size > maxBytes) { response.destroy(); throw new WorkflowError("Image exceeds the configured download limit."); } chunks.push(bytes); }
-    const bytes = Buffer.concat(chunks); imageMetadata(bytes); return bytes;
+    const bytes = Buffer.concat(chunks);
+    if (limits.convertSvg) return normalizeLogoImage(bytes);
+    imageMetadata(bytes); return bytes;
   }
   throw new WorkflowError("Image has too many redirects.");
 }
@@ -61,6 +65,37 @@ export function imageMetadata(bytes: Buffer) {
     while(at+9<bytes.length) { if(bytes[at]!==255) break; const marker=bytes[at+1];if(marker===0xd9||marker===0xda)break; const length=bytes.readUInt16BE(at+2);if(length<2)break;if([0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf].includes(marker)){height=bytes.readUInt16BE(at+5);width=bytes.readUInt16BE(at+7);break;}at+=length+2; }
     mime="image/jpeg";extension="jpg";
   }
-  if(!mime||width<1||height<1||width>16000||height>16000||width*height>40000000||bytes.length>MAX_BYTES) throw new WorkflowError("Unsupported or oversized image. Use a valid PNG, JPEG, WebP or GIF under 20 MB and 40 megapixels.");
+  if(!mime||width<1||height<1||width>16000||height>16000||width*height>MAX_PIXELS||bytes.length>MAX_BYTES) throw new WorkflowError("Unsupported or oversized image. Use a valid PNG, JPEG, WebP or GIF under 20 MB and 40 megapixels.");
   return { width,height,mime,extension };
+}
+
+function isSvg(bytes: Buffer) {
+  if (bytes.length > MAX_BYTES) return false;
+  const prefix = bytes.subarray(0, Math.min(bytes.length, 4096)).toString("utf8").replace(/^\uFEFF/, "");
+  return /^\s*(?:<\?xml[\s\S]*?\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<svg(?:\s|>)/i.test(prefix);
+}
+
+/** Convert a downloaded logo to the bounded raster format used by storage and composition. */
+export async function normalizeLogoImage(bytes: Buffer): Promise<Buffer> {
+  try { imageMetadata(bytes); return bytes; }
+  catch (error) { if (!isSvg(bytes)) throw error; }
+  const markup = bytes.toString("utf8");
+  // The renderer does not need executable markup or resources outside the downloaded logo.
+  if (/<!DOCTYPE|<!ENTITY|<script\b|<foreignObject\b/i.test(markup)
+    || /\b(?:href|xlink:href)\s*=\s*(["'])\s*(?!#)[\s\S]*?\1/i.test(markup)
+    || /url\s*\(\s*(["']?)(?!#)[^)]+\1\s*\)/i.test(markup)) {
+    throw new WorkflowError("The SVG logo contains unsupported external or executable content.");
+  }
+  try {
+    const sharp = (await import("sharp")).default;
+    const output = await sharp(bytes, { density: 288, limitInputPixels: MAX_PIXELS, failOn: "error" })
+      .resize({ width: LOGO_MAX_EDGE, height: LOGO_MAX_EDGE, fit: "inside" })
+      .png({ compressionLevel: 9 })
+      .toBuffer();
+    imageMetadata(output);
+    return output;
+  } catch (error) {
+    if (error instanceof WorkflowError) throw error;
+    throw new WorkflowError("The SVG logo could not be converted to a safe PNG.");
+  }
 }

@@ -3,6 +3,7 @@ import type { Source } from "./session-types";
 import { requireKey, webUrl, WorkflowError } from "./validation";
 import { absolute, pageHint } from "./research/extract";
 import { fetchShopifyProductSource } from "./research/shopify-fetch";
+import { MAX_RESEARCH_ASSETS } from "./research/limits";
 
 async function firecrawl(endpoint: string, body: object, timeout = 75000) {
   const response = await fetch(`https://api.firecrawl.dev/v2/${endpoint}`, {
@@ -37,8 +38,9 @@ export function normalizeScrape(url: string, result: { data: Record<string, unkn
     url: webUrl(url), requestedUrl: url, finalUrl,
     title: String(metadata.ogTitle || metadata.title || new URL(url).hostname).slice(0, 500),
     description: String(metadata.ogDescription || metadata.description || "").slice(0, 4000),
-    // Preserve candidates before classification, bounded for a snapshot rather than first-page order.
-    images: [...new Set(normalized)].slice(0, 300), links: [...new Set(links)].slice(0, 500),
+    // Research snapshots intentionally keep a small candidate set; the aggregate
+    // research pass applies the same hard ceiling after product data is merged.
+    images: [...new Set(normalized)].slice(0, MAX_RESEARCH_ASSETS), links: [...new Set(links)].slice(0, 500),
     markdown: String(data.markdown || "").slice(0, 40000), rawHtml: snapshotHtml(String(data.rawHtml || data.html || "")),
     branding: brand, pageType: pageHint(finalUrl), fetchedAt: new Date().toISOString(), providerUsage: result.creditsUsed,
     colors: Object.fromEntries(Object.entries((brand.colors || {}) as object).filter((entry): entry is [string, string] => typeof entry[1] === "string" && /^#(?:[a-f0-9]{3}|[a-f0-9]{4}|[a-f0-9]{6}|[a-f0-9]{8})$/i.test(entry[1]))),

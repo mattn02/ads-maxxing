@@ -5,7 +5,7 @@ import { visualReviewSchema, type VisualReview } from "../schema";
 import type { CodeCheck, Review, Variant } from "../session-types";
 import { readImage, readAsset } from "../storage";
 import { providerStatusCode, WorkflowError } from "../validation";
-import { brandTokensSchema, designSchema } from "../creative/schema";
+import { brandTokensSchema, creativeFontFamily, designSchema } from "../creative/schema";
 import { matchesStage, validatePlan } from "../creative/reuse";
 import { resolveCommercialCopy, validateCreative } from "../creative/fit";
 import { hasEvidence } from "./researcher";
@@ -33,14 +33,14 @@ export function codeChecks(variant: Variant, image: Buffer): CodeCheck[] {
   const groundedPhoto = research.schemaVersion === 2
     ? !!product && !!source && product.canonicalUrl === brief.productUrl && source.originalUrl === variant.referenceImage && source.originalUrl === brief.referenceImage && source.eligibleAsProductReference && ["product_photo", "product_lifestyle"].includes(source.role) && product.assetIds.includes(source.id) && source.productIds.includes(product.id) && (!brief.variantId || source.variantIds.includes(brief.variantId))
     : research.sources.some(source => source.url === brief.productUrl && source.images.includes(variant.referenceImage));
-  const modernCommercial = variant.rendererVersion === 4 || variant.rendererVersion === 5;
+  const modernCommercial = [4, 5, 6].includes(variant.rendererVersion ?? -1);
   const exactCopy = modernCommercial
     ? commercialValid && variant.renderedCopy?.headline === brief.headline && variant.renderedCopy?.cta === brief.cta && variant.renderedCopy?.price === commercial.price && variant.renderedCopy?.offer === commercial.offer
     : variant.renderedCopy?.headline === brief.headline && variant.renderedCopy?.cta === brief.cta && variant.renderedCopy?.offer === (sale?.quote ?? null);
   return [
     ...(variant.rendererVersion === undefined ? [] : [
       { name: "design_contract", passed: designSchema.safeParse(brief.design).success && brandTokensSchema.safeParse(brief.tokens).success && JSON.stringify(variant.design) === JSON.stringify(brief.design) && JSON.stringify(variant.tokens) === JSON.stringify(brief.tokens), detail: "Renderer uses the approved design and token snapshot." },
-      { name: "renderer_version", passed: [2, 3, 4, 5].includes(variant.rendererVersion), detail: "Supported deterministic renderer version." },
+      { name: "renderer_version", passed: [2, 3, 4, 5, 6].includes(variant.rendererVersion), detail: "Supported deterministic renderer version." },
       { name: "stage_provenance", passed: !!brief.executionPlan && variant.sceneAssetId === brief.executionPlan.scene.assetId && matchesStage(variant.sceneAsset, brief.executionPlan.scene.fingerprint), detail: "The complete scene matches the approved plan and pinned original." },
       { name: "saved_original", passed: !!brief.sourceAssetId && variant.sourceAssetId === brief.sourceAssetId, detail: "Generation and review use the approved immutable original." },
       { name: "exact_copy", passed: exactCopy, detail: modernCommercial ? "Headline, CTA, exact researched price, and complete confirmed offer were passed unchanged to composition." : "Headline, CTA, and complete offer quote were passed unchanged to composition." },
@@ -63,16 +63,17 @@ export async function reviewAd(variant: Variant): Promise<Review> {
   if (variant.rendererVersion !== undefined) {
     let fits = false;
     try {
-      if (variant.rendererVersion === 4 || variant.rendererVersion === 5) await validateCreative(variant.brief, variant.research);
+      if ([4, 5, 6].includes(variant.rendererVersion)) await validateCreative(variant.brief, variant.research);
       else { designSchema.parse(variant.brief.design); brandTokensSchema.parse(variant.brief.tokens); }
-      validatePlan(variant.brief, variant.rendererVersion === 4 || variant.rendererVersion === 5 ? variant.research : undefined);
+      validatePlan(variant.brief, [4, 5, 6].includes(variant.rendererVersion) ? variant.research : undefined);
       fits = true;
     } catch { /* Report validation failure as a code check. */ }
-    checks.push({ name: "copy_fit", passed: fits, detail: "Complete approved copy fits the bundled font and template slots." });
+    const family = brandTokensSchema.safeParse(variant.brief.tokens);
+    checks.push({ name: "copy_fit", passed: fits, detail: `Complete approved copy fits ${family.success ? creativeFontFamily(family.data) : "the saved font"} and the template slots.` });
     checks.push({ name: "saved_stage_bytes", passed: !!variant.sceneAssetId && !!await readAsset(variant.sceneAssetId), detail: "The complete generated scene remains saved." });
   }
   const original = variant.sourceAssetId ? await readAsset(variant.sourceAssetId) : null;
-  if ([2, 3, 4, 5].includes(variant.rendererVersion ?? -1) && !original) throw new WorkflowError("Saved original is missing; fidelity review cannot run.");
+  if ([2, 3, 4, 5, 6].includes(variant.rendererVersion ?? -1) && !original) throw new WorkflowError("Saved original is missing; fidelity review cannot run.");
   const messages: ModelMessage[] = [{ role: "user", content: [
       { type: "text", text: JSON.stringify({ brief: { headline: variant.brief.headline, cta: variant.brief.cta, renderedPrice: variant.renderedCopy?.price ?? null, renderedOffer: variant.renderedCopy?.offer ?? null, direction: variant.brief.direction, productId: variant.brief.productId, variantId: variant.brief.variantId, productUrl: variant.brief.productUrl, design: variant.brief.design }, checks, product: variant.research.products?.find(item => item.id === variant.brief.productId), colors: variant.research.colors, voice: variant.research.voice, audience: variant.research.audience, sources: variant.research.sources.map(({ url, description, markdown, fetchedAt }) => ({ url, description, markdown: markdown.slice(0, 10000), fetchedAt })), offers: variant.research.offers, sales: variant.research.sales }) },
       { type: "text", text: "Source product photo:" },

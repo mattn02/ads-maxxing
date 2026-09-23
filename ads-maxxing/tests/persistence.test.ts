@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { publicAddress, imageMetadata } from "../lib/workflow/asset-download";
+import { publicAddress, imageMetadata, normalizeLogoImage } from "../lib/workflow/asset-download";
 import { normalizedHostname, sessionId, saveSession } from "../lib/workflow/sessions";
 import { publicSession } from "../lib/workflow/public-session";
 import { authenticated, persistenceContext } from "../lib/supabase/server";
@@ -15,6 +15,15 @@ test("image validation accepts real PNG dimensions and rejects HTML, bombs and i
  assert.deepEqual(imageMetadata(png),{width:1,height:1,mime:'image/png',extension:'png'});
  assert.throws(()=>imageMetadata(Buffer.from('<html>login</html>')),/Unsupported/);
  png.writeUInt32BE(50000,16);assert.throws(()=>imageMetadata(png),/oversized/);
+});
+test("logo normalization converts bounded SVGs to PNG and rejects active SVG content",async()=>{
+ const svg=Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="100" viewBox="0 0 400 100"><rect width="400" height="100" fill="#123456"/></svg>');
+ const png=await normalizeLogoImage(svg);const metadata=imageMetadata(png);
+ assert.equal(metadata.mime,'image/png');assert.equal(metadata.width,1200);assert.equal(metadata.height,300);
+ const raster=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCfkAAAAASUVORK5CYII=','base64');
+ assert.equal(await normalizeLogoImage(raster),raster);
+ await assert.rejects(normalizeLogoImage(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>')),/unsupported external or executable/);
+ await assert.rejects(normalizeLogoImage(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="50000" height="50000"></svg>')),/could not be converted/);
 });
 test("hostname ownership preserves store subdomains and strips only ordinary www",()=>{
  assert.equal(normalizedHostname('https://WWW.LoopyCases.com/products/test?variant=1'),'loopycases.com');

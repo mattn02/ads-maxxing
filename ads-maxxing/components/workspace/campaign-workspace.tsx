@@ -68,9 +68,14 @@ export function CampaignWorkspace({
     // A poll issued during a mutation can arrive after its completed response.
     if (next.events.length < sessionRef.current.events.length) return;
     const resolvedInput = sessionRef.current.nextAction?.kind === "needs_input" && next.nextAction?.kind === "continue";
+    const enteredInput = sessionRef.current.nextAction?.kind !== "needs_input" && next.nextAction?.kind === "needs_input";
     sessionRef.current = next;
     setSession(next);
-    if (resolvedInput) setView("overview");
+    if (enteredInput) {
+      setSection("Ads");
+      setView("research");
+      setMobileChat(false);
+    } else if (resolvedInput) setView("overview");
     const published = next.variants.filter(isPublishedVariant);
     const newest = published.at(-1);
     if (newest && !seenVariants.current.has(newest.id)) {

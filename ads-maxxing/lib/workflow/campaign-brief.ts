@@ -16,8 +16,9 @@ const repairSchema = z.object({ headline: z.string(), cta: z.string() });
 
 async function repairGeneratedCopy<T extends z.infer<typeof generatedDraftSchema>>(draft: T, research: Research, context: Record<string, unknown>): Promise<T> {
   let current = draft;
+  const tokens = await resolveBrandTokens(research);
   for (let repair = 0; repair <= 2; repair++) {
-    const errors = await generatedCopyErrors({ ...current, tokens: resolveBrandTokens(research) });
+    const errors = await generatedCopyErrors({ ...current, tokens });
     if (!errors.length) return current;
     if (repair === 2) throw new WorkflowError(`Generated copy did not pass the preflight gate after two repairs: ${errors.map(error => `${error.field}: ${error.message}`).join("; ")}`, 502);
     const invalidFields = [...new Set(errors.map(error => error.field))];

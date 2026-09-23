@@ -90,9 +90,17 @@ export class Workflow {
         intent.researchId = result.id;
         if (result.campaign) {
           const members = scopeForCampaign(result.campaign, result.products || []).members;
-          const ready = members.find(member => memberReferenceReadiness(member, result.products || [], result.assets || []).status === "ready");
+          const selected = result.campaign.selectedProductId
+            ? members.filter(member => member.productId === result.campaign!.selectedProductId)
+            : [];
+          const ready = selected.find(member => memberReferenceReadiness(member, result.products || [], result.assets || []).status === "ready");
           if (ready) await this.selectCampaignMember(ready.productId, ready.variantId);
-          else { intent.pausedReason = "needs_input"; intent.error = "No included campaign product has a verified reference yet. Choose or confirm a suitable product photo."; }
+          else {
+            intent.pausedReason = "needs_input";
+            intent.error = selected.length
+              ? "The selected product does not have a verified reference yet. Choose a product with a suitable photo."
+              : "Choose a product from the researched collection to continue.";
+          }
         }
         await this.deps.save(this.session);
         return this.session; // A fresh request gives planning/generation its full budget.
@@ -345,7 +353,8 @@ export class Workflow {
     if (this.session.researchState?.stage === "awaiting_direction") throw new WorkflowError("Choose a direction before preparing a brief.", 409);
     groundBrief(data, research);
     if (data.parentVariantId && !this.session.variants.some(variant => variant.id === data.parentVariantId)) throw new WorkflowError("Parent variant not found.");
-    const next: Brief = { ...data, design: data.design ?? structuredClone(DEFAULT_DESIGN), tokens: resolveBrandTokens(research), id: randomUUID(), researchId: research.id, approvalOrigin, ...(retryFrom ? { retryOfBriefId: retryFrom.id } : {}) };
+    const tokens = retryFrom?.tokens ?? await resolveBrandTokens(research);
+    const next: Brief = { ...data, design: data.design ?? structuredClone(DEFAULT_DESIGN), tokens, id: randomUUID(), researchId: research.id, approvalOrigin, ...(retryFrom ? { retryOfBriefId: retryFrom.id } : {}) };
     await validateCreative(next, research);
     const parent = this.session.variants.find(variant => variant.id === next.parentVariantId);
     // Grounding above proves that the exact original is still valid in today's research.

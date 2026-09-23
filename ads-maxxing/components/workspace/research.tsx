@@ -94,23 +94,30 @@ export function ResearchView({ session, busy, create, action }: {
   const research = session.research!;
   const awaiting = session.researchState?.stage === "awaiting_direction";
   const selected = research.campaign?.selectedProductId;
+  const choosingProduct = session.researchState?.stage === "needs_selection" && !selected;
+  const campaignProductIds = research.campaign?.productIds
+    ? new Set(research.campaign.productIds)
+    : null;
+  const products = campaignProductIds
+    ? (research.products || []).filter((product) => campaignProductIds.has(product.id))
+    : research.products || [];
   const run = research.runs?.at(-1);
   return <>
     <SectionHeading eyebrow="A CREATIVE STARTING POINT" title={research.brandKit?.name || "Meet your brand"}><Badge>{awaiting ? "Choose a direction" : "Research findings"}</Badge></SectionHeading>
     <div className="notice">{awaiting ? "Your brand kit is saved. Choose what to promote before we research product photos." : research.campaign?.status === "needs_selection" ? "Choose a product to focus this campaign. This is a shortlist, not the complete catalog." : "Review the real product and its photo before preparing your ad."}</div>
-    <div className="findings-grid">
-      <div className="card"><Badge>{research.brandKit?.overrides.voice ? "User supplied" : "Inferred"}</Badge><h3>Brand voice</h3><p>{research.voice}</p></div>
-      <div className="card"><Badge>{research.brandKit?.overrides.audience ? "User supplied" : "Inferred"}</Badge><h3>Suggested audience</h3><p>{research.audience}</p></div>
-    </div>
     {awaiting && <div className="card"><h2>Choose what to promote</h2><p>Choose a suggested campaign, describe your idea, or share a product URL.</p><Button onClick={create}>Choose a campaign →</Button></div>}
-    {!!research.products?.length && <><h2>Products <span className="muted">{research.products.length} researched</span></h2><div className="source-grid">{research.products.map(product => <div className="card source-card" key={product.id}>
+    {!!products.length && <><h2>{choosingProduct ? "Choose a product" : "Products"} <span className="muted">{products.length} researched</span></h2>{choosingProduct && <p className="muted">Select the product you want to feature. We won’t prepare the ad until you choose.</p>}<div className="source-grid">{products.map(product => <div className="card source-card" key={product.id}>
       <h3>{product.title}</h3><p>{product.description}</p><a href={product.canonicalUrl} target="_blank" rel="noreferrer">View source ↗</a>
       {product.price && <p>{product.price.currency} {product.price.amount} · observed price</p>}
       <div className="images">{research.assets?.filter(asset => product.assetIds.includes(asset.id) && asset.eligibleAsProductReference).map(asset => <img key={asset.id} src={asset.originalUrl} alt={`Source photo of ${product.title}`} loading="lazy" />)}</div>
       {!research.assets?.some(asset => product.assetIds.includes(asset.id) && asset.eligibleAsProductReference) && <p className="notice">No verified Shopify gallery image was found for this product.</p>}
       <p className="small muted">{product.variants.length ? `${product.variants.length} evidenced variants` : "Variant not established; do not assume a specific size or model."}</p>
-      <Button disabled={busy || selected === product.id} onClick={() => void action({ action: "selectProduct", productId: product.id })}>{selected === product.id ? "Selected product" : "Choose this product"}</Button>
+      <Button primary={choosingProduct && selected !== product.id} disabled={busy || selected === product.id} onClick={() => void action({ action: "selectProduct", productId: product.id })}>{selected === product.id ? "Selected product" : "Choose this product →"}</Button>
     </div>)}</div></>}
+    <div className="findings-grid">
+      <div className="card"><Badge>{research.brandKit?.overrides.voice ? "User supplied" : "Inferred"}</Badge><h3>Brand voice</h3><p>{research.voice}</p></div>
+      <div className="card"><Badge>{research.brandKit?.overrides.audience ? "User supplied" : "Inferred"}</Badge><h3>Suggested audience</h3><p>{research.audience}</p></div>
+    </div>
     {selected && <div className="card next-step"><div><h2>Product saved to your campaign</h2><p>Your real product photos are the starting point for the creative.</p></div><Button primary disabled={busy} onClick={create}>View campaign →</Button></div>}
     <details className="card"><summary>Unsorted and excluded images · {research.assets?.filter(asset => !asset.eligibleAsProductReference && asset.role !== "logo").length || 0}</summary>
       <p className="muted">These store images are shown for reference but are never selected for generation because Shopify did not associate them with the product.</p>
@@ -131,7 +138,7 @@ export function BrandView({ session, action }: { session: Session | null; action
       <div className="images">{research.assets?.filter(asset => kit?.logoAssetIds.includes(asset.id)).map(asset => <img key={asset.id} src={asset.originalUrl} alt="Observed brand logo" />)}</div>{!kit?.logoAssetIds.length && <p className="muted">No usable logo found. An ad can proceed without one.</p>}
     </div>
     <div className="findings-grid">{[["Voice", research.voice], ["Audience", research.audience]].map(([label, text]) => <div className="card" key={label}><Badge>{kit?.overrides[label.toLowerCase()] ? "User supplied" : "Inferred"}</Badge><h2>{label}</h2><p>{text}</p></div>)}</div>
-    <div className="card"><h2>Semantic palette</h2><div className="palette">{(kit?.colors || research.colors.map(color => ({ ...color, role: "observed" }))).map((color, index) => <div key={index}><span style={{ backgroundColor: color.value }}/>{color.role} · {color.value}</div>)}</div><h3>Typography</h3><p>Heading: {kit?.typography.heading.value || "Not found"} · Body: {kit?.typography.body.value || "Not found"}</p><p className="muted">{kit?.typography.substitution || "Ads use bundled Geist."}</p></div>
+    <div className="card"><h2>Semantic palette</h2><div className="palette">{(kit?.colors || research.colors.map(color => ({ ...color, role: "observed" }))).map((color, index) => <div key={index}><span style={{ backgroundColor: color.value }}/>{color.role} · {color.value}</div>)}</div><h3>Typography</h3><p>Heading: {kit?.typography.heading.value || "Not found"} · Body: {kit?.typography.body.value || "Not found"}</p><p className="muted">An exact supported family is selected when the brief is saved; otherwise the ad uses bundled Geist.</p></div>
     {kit && <form className="card" onSubmit={event => { event.preventDefault(); void action({ action: "correctBrand", field, value }); setValue(""); }}><h2>Correct your brand kit</h2><p>Saved corrections take priority when research is refreshed.</p><label htmlFor="brand-field">Field</label><select id="brand-field" value={field} onChange={event => setField(event.target.value as typeof field)}><option value="voice">Voice</option><option value="audience">Audience</option><option value="valueProposition">Value proposition</option></select><label htmlFor="brand-value">Your correction</label><textarea id="brand-value" required maxLength={2000} value={value} onChange={event => setValue(event.target.value)}/><Button>Save correction</Button></form>}
     <div className="card"><h2>Campaign preferences</h2>{Object.entries(session.preferences).map(([key, value]) => <p key={key}><strong>{key}</strong> · {value}</p>)}{!Object.keys(session.preferences).length && <p className="muted">Tell your creative partner your campaign preferences in chat.</p>}</div>
   </>;

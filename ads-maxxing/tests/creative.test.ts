@@ -19,7 +19,8 @@ const source: Source = { url: "https://store.example/products/case", images: ["h
 const legacyResearch = assembleResearch([source], { voice: "Playful", audience: "Inferred", sales: [{ description: "Member offer", quote: source.markdown, sourceUrl: source.url }] });
 const baseResearch = productResearch(source);
 const research = { ...baseResearch, sales: legacyResearch.sales, offers: legacyResearch.sales.map(sale => ({ id: sale.id, sourceUrl: sale.sourceUrl, quote: sale.quote, displayCopy: sale.quote, restrictions: sale.quote, productIds: [baseResearch.products![0].id], checkedAt: new Date().toISOString(), eligibility: "eligible" as const, endsAt: null, confirmedAt: new Date().toISOString(), confirmationOrigin: "user_supplied" as const })) };
-const makeBrief = (): Brief => ({ productId: research.products![0].id, referenceAssetId: research.assets!.find(asset => asset.originalUrl === source.images[0])!.id, id: randomUUID(), researchId: research.id, productUrl: source.url, referenceImage: source.images[0], headline: "Hold on to color", cta: "Shop now", direction: "Overall intent", saleId: null, feedback: "", parentVariantId: null, design: { ...DEFAULT_DESIGN }, tokens: resolveBrandTokens(research) });
+const geistTokens = { background: "#f6f3ee", foreground: "#000000", accent: "#000000", ctaForeground: "#ffffff", fontId: "geist-fallback" as const };
+const makeBrief = (): Brief => ({ productId: research.products![0].id, referenceAssetId: research.assets!.find(asset => asset.originalUrl === source.images[0])!.id, id: randomUUID(), researchId: research.id, productUrl: source.url, referenceImage: source.images[0], headline: "Hold on to color", cta: "Shop now", direction: "Overall intent", saleId: null, feedback: "", parentVariantId: null, design: { ...DEFAULT_DESIGN }, tokens: { ...geistTokens } });
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCfkAAAAASUVORK5CYII=", "base64");
 
 test("the transparent overlay preserves the full scene in both legacy template modes", async () => {
@@ -100,10 +101,10 @@ test("emoji copy preserves complete graphemes and renders locally in both templa
   }
 });
 
-test("small design contract and token resolver constrain model styling", () => {
+test("small design contract and token resolver constrain model styling", async () => {
   for (const field of ["template", "alignment", "headlineStyle", "ctaStyle"]) assert.equal(designSchema.safeParse({ ...DEFAULT_DESIGN, [field]: "arbitrary-css" }).success, false);
   assert.equal(designSchema.safeParse({ ...DEFAULT_DESIGN, background: { direction: "x".repeat(1001) } }).success, false);
-  const tokens = resolveBrandTokens({ ...research, colors: [{ value: "url(https://example.com)", sourceUrl: source.url }, { value: "#123", sourceUrl: source.url }] });
+  const tokens = await resolveBrandTokens({ ...research, colors: [{ value: "url(https://example.com)", sourceUrl: source.url }, { value: "#123", sourceUrl: source.url }] });
   assert.equal(tokens.background, "#112233");
   assert.equal(tokens.foreground, "#ffffff");
   assert.equal(readableText("#ffffff"), "#000000");

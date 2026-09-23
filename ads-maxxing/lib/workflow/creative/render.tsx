@@ -15,7 +15,7 @@ export async function renderCreative({ brief, research, tokens, visualBytes, log
   if (JSON.stringify(tokens) !== JSON.stringify(brief.tokens)) throw new WorkflowError("Render tokens differ from the approved brief.");
   if (logoBytes && (!Number.isFinite(logoBytes.width) || !Number.isFinite(logoBytes.height) || logoBytes.width <= 0 || logoBytes.height <= 0)) throw new WorkflowError("Verified logo dimensions must be positive.");
   try {
-    const { data } = await creativeFont();
+    const { data, family } = await creativeFont(tokens);
     // Satori's raster decoder is not reliable for every valid WebP/GIF logo.
     // Normalize the pinned, verified source bytes without changing their content.
     const rendererLogo = logoBytes ? await sharp(logoBytes.bytes, { animated: false }).rotate().png().toBuffer().then(bytes => {
@@ -23,7 +23,7 @@ export async function renderCreative({ brief, research, tokens, visualBytes, log
       return { bytes, width: metadata.width, height: metadata.height, mime: metadata.mime };
     }) : undefined;
     const response = new ImageResponse(<CreativeTemplate design={brief.design!} tokens={tokens} copy={copy} visualBytes={visualBytes} logoBytes={rendererLogo} />, {
-      width: 576, height: 1024, fonts: [{ name: "Geist", data, weight: 400, style: "normal" }],
+      width: 576, height: 1024, fonts: [{ name: family, data, weight: 400, style: "normal" }],
     });
     return Buffer.from(await response.arrayBuffer());
   } catch (error) {

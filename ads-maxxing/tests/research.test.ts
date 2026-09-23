@@ -10,6 +10,7 @@ import { groundBrief } from "../lib/workflow/research/grounding";
 import { Workflow, type WorkflowDependencies } from "../lib/workflow/service";
 import type { Session, Source } from "../lib/workflow/session-types";
 import { productResearch } from "./research-fixture";
+import { MAX_RESEARCH_ASSETS } from "../lib/workflow/research/limits";
 
 const home = "https://store.example/";
 const productUrl = `${home}products/case`;
@@ -95,6 +96,16 @@ test("explicit suggestion click supplies scope and product selection gates multi
   assert.equal(result.brandKit?.id, brand.brandKit?.id); assert.equal(result.campaign?.selectedProductId, result.products![0].id);
 });
 
+test("collection suggestions always wait for the user to choose a researched product", async () => {
+  const calls: string[] = [];
+  const brand = await research(input(), {}, deps(calls));
+  const choice = brand.suggestions!.find(choice => choice.url.includes("/collections/"))!;
+  const result = await research(input(), { previous: brand, direction: { text: choice.label, origin: "choice", choiceId: choice.id, url: choice.url } }, deps(calls));
+  assert.equal(result.products!.length, 1);
+  assert.equal(result.campaign?.status, "needs_selection");
+  assert.equal(result.campaign?.selectedProductId, null);
+});
+
 test("missing optional synthesis keeps source facts and immutable checkpoint", async () => {
   const calls: string[] = [];
   const result = await research(input(productUrl), { direction: { text: productUrl, origin: "specific_url", url: productUrl } }, { ...deps(calls), synthesize: async () => { throw new Error("Model unavailable"); } });
@@ -122,6 +133,25 @@ test("schema column is authoritative, unknown versions and invalid V2 payloads f
 test("retrieval keeps complete branding, final URL, relative images and structured HTML", () => {
   const result = normalizeScrape(home, { data: { metadata: { url: home, title: "Brand" }, images: ["/photo.jpg", "/photo.jpg"], rawHtml: "<html>source</html>", links: ["/products/case"], branding: { colors: { accent: "#abcdff" }, typography: { fontFamily: "Store Font" }, images: { logo: "/logo.svg" } } } });
   assert.deepEqual(result.images, [`${home}photo.jpg`]); assert.equal(result.colors.accent, "#abcdff"); assert.equal(result.rawHtml, "<html>source</html>"); assert.ok(result.branding?.typography);
+});
+
+test("scraping and saved research cap assets while retaining logos and valid product references", async () => {
+  const imageUrls = Array.from({ length: 75 }, (_, index) => `${home}cdn/case-${index}.jpg`);
+  const normalized = normalizeScrape(home, { data: { metadata: { url: home }, images: imageUrls } });
+  assert.equal(normalized.images.length, MAX_RESEARCH_ASSETS);
+
+  const manyImages = { ...node, image: imageUrls };
+  const result = await research(input(productUrl), { direction: { text: productUrl, origin: "specific_url", url: productUrl } }, {
+    ...deps([]),
+    scrape: async url => source(url, url === productUrl ? manyImages : undefined),
+  });
+  assert.equal(result.assets!.length, MAX_RESEARCH_ASSETS);
+  assert.ok(result.assets!.some(asset => asset.role === "logo"));
+  assert.ok(result.assets!.some(asset => asset.eligibleAsProductReference));
+  assert.ok(result.brandKit!.logoAssetIds.every(id => result.assets!.some(asset => asset.id === id)));
+  assert.ok(result.products![0].assetIds.every(id => result.assets!.some(asset => asset.id === id)));
+  assert.ok(result.products![0].variants.every(variant => variant.assetIds.every(id => result.assets!.some(asset => asset.id === id))));
+  assert.match(result.warnings.join(" "), /40 most relevant assets/);
 });
 
 

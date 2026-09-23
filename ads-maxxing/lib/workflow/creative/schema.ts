@@ -31,12 +31,28 @@ export function executionSummary(plan?: ExecutionPlan) {
   return plan ? `${plan.scene.action === "reuse" ? "Reuse product scene" : "Generate complete product scene"} · render exact copy` : "Save a revision to calculate generation steps.";
 }
 const color = z.string().regex(/^#[0-9a-f]{6}$/i);
-export const brandTokensSchema = z.object({
+const brandTokenColors = {
   background: color, foreground: color, accent: color, ctaForeground: color,
-  fontId: z.literal("geist-fallback"),
-});
+};
+export const brandTokensSchema = z.discriminatedUnion("fontId", [
+  z.object({ ...brandTokenColors, fontId: z.literal("geist-fallback") }),
+  z.object({
+    ...brandTokenColors,
+    fontId: z.literal("fontsource"),
+    sourceId: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+    family: z.string().trim().min(1).max(200),
+    weight: z.literal(400),
+    style: z.literal("normal"),
+    format: z.enum(["ttf", "woff"]),
+    version: z.string().regex(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/),
+    fileUrl: z.string().url(),
+  }),
+]);
 export type BrandTokens = z.infer<typeof brandTokensSchema>;
-export const RENDERER_VERSION = 5;
+export function creativeFontFamily(tokens: BrandTokens) {
+  return tokens.fontId === "fontsource" ? tokens.family : "Geist";
+}
+export const RENDERER_VERSION = 6;
 export type VisualInputs = {
   researchId: string; productUrl: string; referenceImage: string; visualDirection: string;
   model: string; background: string; accent: string;

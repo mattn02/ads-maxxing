@@ -54,7 +54,7 @@ export async function pinSourceAsset(input:{sourceUrl:string;researchId:string;k
   const [snapshot]=await rows<{data:{sources?:{images?:string[]}[];assets?:{url?:string;originalUrl?:string}[];brandKit?:unknown}}>("research_snapshots",`id=eq.${input.researchId}&select=data`);
   const known=snapshot?.data.sources?.some(s=>s.images?.includes(input.sourceUrl))||snapshot?.data.assets?.some(a=>a.url===input.sourceUrl||a.originalUrl===input.sourceUrl);
   if(!known)throw new WorkflowError("Only images from saved research can be captured.");
-  const bytes=await downloadImage(input.sourceUrl);
+  const bytes=await downloadImage(input.sourceUrl,false,{convertSvg:kind==="logo"});
   const asset=await persistBytes({id:randomUUID(),kind,sourceUrl:input.sourceUrl,researchId:input.researchId,metadata:{}},bytes);
   return asset.id;
 }

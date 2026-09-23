@@ -2,10 +2,10 @@
 import { useState } from "react";
 import {
   DEFAULT_DESIGN,
+  creativeFontFamily,
   executionSummary,
   type DesignSpec,
 } from "@/lib/workflow/creative/schema";
-import { resolveBrandTokens } from "@/lib/workflow/creative/tokens";
 import type { Brief, Session, Variant } from "@/lib/workflow/session-types";
 import {
   groupVariants,
@@ -124,9 +124,7 @@ export function BriefEditor({
     ...brief,
     parentVariantId: completedVariant?.id ?? brief.parentVariantId,
     design: brief.design?.version === 2 ? brief.design : structuredClone(DEFAULT_DESIGN),
-    tokens:
-      brief.tokens ??
-      (session.research ? resolveBrandTokens(session.research) : undefined),
+    tokens: brief.tokens,
   });
   const [dirty, setDirty] = useState(brief.design?.version !== 2 || !brief.tokens);
   const researchedPrice = session.research?.products?.find(product => product.id === draft.productId)?.price;
@@ -269,7 +267,7 @@ export function BriefEditor({
             </select>
             <p className="notice">{dirty ? "Save edits to see the updated generation plan before approving." : executionSummary(brief.executionPlan)}</p>
             {!dirty && brief.executionPlan && <p className="muted small">{Number(brief.executionPlan.scene.action === "generate")} image generation {brief.executionPlan.scene.action === "generate" ? "call" : "calls"} planned. Copy is rendered exactly after generation.</p>}
-            <p>Font: bundled Geist fallback, not the brand’s actual font. Color emojis use Twemoji.</p>
+            <p>Font: {draft.tokens ? creativeFontFamily(draft.tokens) : "resolved when this brief is saved"}. Color emojis use Twemoji.</p>
           </fieldset>
 
           <label>Researched price</label>
