@@ -1,5 +1,13 @@
 # Vercel deployment
 
+## Git deployment configuration (September 23)
+
+GitHub is now connected to `mattn02/ads-maxxing`, with automatic deployments enabled and `main` as the production branch. The Vercel project Root Directory is `ads-maxxing`. The repository root contains the application folder rather than a `package.json`; leaving Root Directory empty caused Git builds to fail with `ENOENT /vercel/path0/package.json`.
+
+Pushes to `main` use this configuration automatically. A separate deploy hook is unnecessary for push-triggered deployments; hooks are for explicitly requesting a build. The previously failed commit `7503bec` was resubmitted after correcting the project setting.
+
+For manual deployment, prefer redeploying a Git deployment with `vercel redeploy DEPLOYMENT_ID --target production --scope matt-gpt2`. A fresh CLI source upload must include the repository root to match the configured application subdirectory.
+
 ## Reviewer and pricing update
 
 The September 22 follow-up release switches the production `FINAL_AD_REVIEW_MODEL` and code default to `google/gemini-2.5-flash`. It includes the local Shopify price/currency and UI changes excluded from the first release. The existing free Ling fallback remains configured for model-access denial.
@@ -25,15 +33,9 @@ The project runs on the existing mattGPT Hobby team. No plan upgrade or custom d
 
 The six application variables from `.env.local` were configured for the production environment. The Supabase URL and publishable key are configuration; Supabase secret, Firecrawl key, fal key, and AI Gateway key are Vercel secrets. The unused JWKS setting and local Vercel OIDC token were not copied. `.vercelignore` excludes local environment files, agent resources, generated output, and build metadata from uploads.
 
-This release was uploaded from the local application directory using the Vercel CLI. Automatic GitHub linking failed because Vercel could not access the repository. Pushes therefore do **not** automatically redeploy. For future Git integration, authorize the repository in Vercel and set its Root Directory to `ads-maxxing` (the application is nested one level below the Git repository root).
+The initial release was uploaded from the local application directory using the Vercel CLI. Automatic GitHub linking initially failed because Vercel could not access the repository. This limitation was resolved by the Git integration and root-directory correction recorded above.
 
 Additional local UI and product-price changes appeared after the source upload. They are not part of this verified deployment. Re-run the checks before deploying that later work. The verification below describes the uploaded snapshot.
-
-To redeploy from this application directory with the Vercel CLI installed and authenticated:
-
-```sh
-vercel deploy --prod --scope matt-gpt2
-```
 
 ## Checks completed
 
