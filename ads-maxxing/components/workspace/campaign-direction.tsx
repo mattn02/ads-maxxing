@@ -31,7 +31,7 @@ export function CampaignDirection({
     <section className="campaign-direction" aria-labelledby={`${fieldId}-heading`}>
       <span className="eyebrow">YOUR NEXT CAMPAIGN</span>
       <h2 id={`${fieldId}-heading`}>What would you like to promote?</h2>
-      <p className="muted">Pick a starting point or share your idea. We’ll find the product photos, write the copy, and create your first ad.</p>
+      <p className="muted">Pick a starting point or share your idea. We’ll research the products, then you’ll choose a photo and optional offer before the ad is made.</p>
       <form onSubmit={(event) => {
         event.preventDefault();
         if (!busy && (choiceId || direction.trim()))
@@ -59,8 +59,8 @@ export function CampaignDirection({
           onChange={(event) => { setDirection(event.target.value); setChoiceId(""); }}
         />
         <div className="campaign-launch">
-          <p className="small muted">{collectionSelected ? "We’ll research this collection, then you’ll choose the product for the ad." : "One portrait ad, using your real product. You can refine it before accepting."}</p>
-          <Button primary disabled={busy || (!choiceId && !direction.trim())}>{busy ? "Getting started…" : collectionSelected ? "Show products →" : "Generate ad →"}</Button>
+          <p className="small muted">{collectionSelected ? "We’ll research this collection, then you’ll choose the product, photo, and optional offer." : "We’ll find a real product photo, then you’ll review the choices for your ad."}</p>
+          <Button primary disabled={busy || (!choiceId && !direction.trim())}>{busy ? "Getting started…" : collectionSelected ? "Find products →" : "Review products →"}</Button>
         </div>
       </form>
     </section>

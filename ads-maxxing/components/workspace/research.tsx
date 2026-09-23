@@ -2,7 +2,6 @@
 import { useState } from "react";
 import type { WorkflowAction } from "@/lib/workspace/api";
 import type { Session } from "@/lib/workflow/session-types";
-import { isPublishedVariant } from "@/lib/workspace/api";
 import { Badge, Button, EmptyState, SectionHeading } from "./ui";
 export function Onboarding({
   busy,
@@ -89,7 +88,7 @@ export function Onboarding({
   );
 }
 export function ResearchView({ session, busy, create, action }: {
-  session: Session; busy: boolean; send: (text: string) => void; create: () => void; action: (body: WorkflowAction) => Promise<unknown>;
+  session: Session; busy: boolean; create: () => void; action: (body: WorkflowAction) => Promise<unknown>;
 }) {
   const research = session.research!;
   const awaiting = session.researchState?.stage === "awaiting_direction";
@@ -123,7 +122,7 @@ export function ResearchView({ session, busy, create, action }: {
       <p className="muted">These store images are shown for reference but are never selected for generation because Shopify did not associate them with the product.</p>
       <div className="asset-grid">{research.assets?.filter(asset => !asset.eligibleAsProductReference && asset.role !== "logo").slice(0, 36).map(asset => <div className="card asset" key={asset.id}><img src={asset.originalUrl} alt="Unsorted store image" loading="lazy"/><Badge>{asset.role}</Badge></div>)}</div>
     </details>
-    <details className="card"><summary>Offers and customer evidence</summary><p>A current offer is included automatically only after you confirm this product and target customers meet every restriction.</p>{research.offers?.map(offer => <p key={offer.id}>{offer.quote} <Badge>{offer.eligibility}</Badge><br/><a href={offer.sourceUrl} target="_blank" rel="noreferrer">Source ↗</a> · checked {new Date(offer.checkedAt).toLocaleDateString()}{selected && offer.eligibility !== "eligible" && <Button disabled={busy} onClick={() => void action({ action: "confirmOffer", offerId: offer.id, productId: selected })}>I confirm this product and target customers meet all these terms</Button>}</p>)}{!research.offers?.length && <p className="muted">No supported offer found. Evergreen product ads can proceed.</p>}{research.customerEvidence?.map(item => <p key={item.id}><Badge>{item.kind}</Badge> {item.value} · {item.productId ? "Product-scoped" : "Company-scoped"} <a href={item.evidence.sourceUrl} target="_blank" rel="noreferrer">Source ↗</a></p>)}{!research.customerEvidence?.length && <p className="muted">No customer evidence found. No rating or testimonial will be invented.</p>}</details>
+    <details className="card"><summary>Offers and customer evidence</summary><p>Choose an offer at the product checkpoint, or use Change offer beside an existing ad. You’ll confirm its product and customer restrictions there.</p>{research.offers?.map(offer => <p key={offer.id}>{offer.quote} <Badge>{offer.eligibility}</Badge><br/><a href={offer.sourceUrl} target="_blank" rel="noreferrer">Source ↗</a> · checked {new Date(offer.checkedAt).toLocaleDateString()}</p>)}{!research.offers?.length && <p className="muted">No supported offer found. Evergreen product ads can proceed.</p>}{research.customerEvidence?.map(item => <p key={item.id}><Badge>{item.kind}</Badge> {item.value} · {item.productId ? "Product-scoped" : "Company-scoped"} <a href={item.evidence.sourceUrl} target="_blank" rel="noreferrer">Source ↗</a></p>)}{!research.customerEvidence?.length && <p className="muted">No customer evidence found. No rating or testimonial will be invented.</p>}</details>
     <details className="card"><summary>Research coverage and sources</summary><p>{run ? `${run.scope} stage · ${run.status} · ${run.attemptedUrls.length} pages attempted · ${run.failedUrls.length} unavailable` : research.schemaVersion === 2 ? "Brand context saved. Choose a direction to begin product research." : "Legacy research: refresh a product before making a new brief."}</p>{research.sources.map(source => <p key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.title} ↗</a> · {new Date(source.fetchedAt).toLocaleString()}</p>)}</details>
     {research.warnings.map(warning => <p className="notice" key={warning}>{warning}</p>)}
   </>;
@@ -142,9 +141,4 @@ export function BrandView({ session, action }: { session: Session | null; action
     {kit && <form className="card" onSubmit={event => { event.preventDefault(); void action({ action: "correctBrand", field, value }); setValue(""); }}><h2>Correct your brand kit</h2><p>Saved corrections take priority when research is refreshed.</p><label htmlFor="brand-field">Field</label><select id="brand-field" value={field} onChange={event => setField(event.target.value as typeof field)}><option value="voice">Voice</option><option value="audience">Audience</option><option value="valueProposition">Value proposition</option></select><label htmlFor="brand-value">Your correction</label><textarea id="brand-value" required maxLength={2000} value={value} onChange={event => setValue(event.target.value)}/><Button>Save correction</Button></form>}
     <div className="card"><h2>Campaign preferences</h2>{Object.entries(session.preferences).map(([key, value]) => <p key={key}><strong>{key}</strong> · {value}</p>)}{!Object.keys(session.preferences).length && <p className="muted">Tell your creative partner your campaign preferences in chat.</p>}</div>
   </>;
-}
-export function AssetsView({ session }: { session: Session | null }) {
-  const assets = session?.research?.assets || [];
-  const outputs = session?.variants.filter(isPublishedVariant) ?? [];
-  return <><SectionHeading eyebrow="YOUR CREATIVE MATERIALS" title="Assets"><Badge>Current campaign</Badge></SectionHeading><p className="muted">Shopify-associated product photos are selected for generation. Approved source bytes are pinned when preparing a brief.</p><div className="asset-grid">{assets.map(asset => <a className="card asset" key={asset.id} href={asset.originalUrl} target="_blank" rel="noreferrer"><img src={asset.originalUrl} alt={asset.role.replaceAll("_", " ")} loading="lazy"/><Badge>{asset.role.replaceAll("_", " ")}</Badge><p className="small muted">{asset.eligibleAsProductReference ? "Shopify product reference" : "Not a product reference"}</p></a>)}{outputs.map(variant => <a className="card asset" key={variant.id} href={variant.imageUrl} target="_blank" rel="noreferrer"><img src={variant.imageUrl} alt={variant.brief.headline} loading="lazy"/><h3>{variant.brief.headline}</h3><Badge>Saved output</Badge></a>)}</div>{!assets.length && !outputs.length && <EmptyState title="A home for your product photos">Research a product to collect its gallery.</EmptyState>}</>;
 }

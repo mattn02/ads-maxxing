@@ -1,9 +1,6 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
-import type { ConciergeMessage } from "@/lib/workflow/agents/concierge";
 import type { Session, Variant } from "@/lib/workflow/session-types";
 import type { GenerationSource } from "@/lib/workflow/generation-contracts";
 import {
@@ -14,13 +11,14 @@ import {
   type WorkflowAction,
 } from "@/lib/workspace/api";
 import { Button } from "@/components/workspace/ui";
-import { AssetsView, ResearchView } from "@/components/workspace/research";
+import { ResearchView } from "@/components/workspace/research";
 import { AdsView, BriefEditor } from "@/components/workspace/ads";
-import { ChatPanel, type ChatAttachment } from "@/components/workspace/chat";
+import { AdChat } from "./ad-chat";
+import { CampaignCheckpoint } from "./campaign-checkpoint";
 import { CampaignDirection } from "./campaign-direction";
 import { CampaignProgress } from "./campaign-progress";
 import { CampaignProducts } from "./campaign-products";
-type Section = "Ads" | "Assets" | "Brand";
+type Section = "Ads" | "Brand";
 export function CampaignWorkspace({
   initial,
   sessions,
@@ -46,12 +44,12 @@ export function CampaignWorkspace({
 }) {
   const [session, setSession] = useState(initial);
   const [section, setSection] = useState<Section>("Ads");
-  const [view, setView] = useState<"overview" | "brief" | "research">(
-    "overview",
+  const [view, setView] = useState<"overview" | "brief" | "research" | "setup" | "direction">(
+    initial.researchState?.generationIntent?.setupPending && initial.researchState.generationIntent.researchId ? "setup" : "overview",
   );
   const [selected, setSelected] = useState<string | null>(initial.variants.filter(isPublishedVariant).at(-1)?.id ?? null);
-  const [input, setInput] = useState("");
-  const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
+  const [chatBusy, setChatBusy] = useState(false);
+  const [preparingProduct, setPreparingProduct] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState("");
   const [refreshError, setRefreshError] = useState("");
@@ -68,12 +66,12 @@ export function CampaignWorkspace({
     // A poll issued during a mutation can arrive after its completed response.
     if (next.events.length < sessionRef.current.events.length) return;
     const resolvedInput = sessionRef.current.nextAction?.kind === "needs_input" && next.nextAction?.kind === "continue";
-    const enteredInput = sessionRef.current.nextAction?.kind !== "needs_input" && next.nextAction?.kind === "needs_input";
+    const enteredInput = next.nextAction?.kind === "needs_input" && (sessionRef.current.nextAction?.kind !== "needs_input" || sessionRef.current.researchState?.generationIntent?.requestId !== next.researchState?.generationIntent?.requestId);
     sessionRef.current = next;
     setSession(next);
     if (enteredInput) {
       setSection("Ads");
-      setView("research");
+      setView(next.researchState?.generationIntent?.setupPending ? "setup" : "research");
       setMobileChat(false);
     } else if (resolvedInput) setView("overview");
     const published = next.variants.filter(isPublishedVariant);
@@ -98,23 +96,6 @@ export function CampaignWorkspace({
       return null;
     }
   }, [initial.id, receive]);
-  const { messages, sendMessage, status, error } = useChat<ConciergeMessage>({
-    id: initial?.id || "setup",
-    messages: (initial?.messages as ConciergeMessage[]) || [],
-    transport: new DefaultChatTransport({
-      api: "/api/chat",
-      prepareSendMessagesRequest: ({ id, messages }) => ({
-        body: { id, message: messages[messages.length - 1] },
-      }),
-    }),
-    onFinish: () => {
-      void refresh();
-    },
-    onError: () => {
-      void refresh();
-    },
-  });
-  const chatBusy = status === "submitted" || status === "streaming";
   const busy = navigationBusy || actionBusy || chatBusy || !!session.operationActive;
   useEffect(() => {
     if (!actionBusy && !chatBusy && !session.operationActive) return;
@@ -197,35 +178,20 @@ export function CampaignWorkspace({
       void action({ action: "continueCampaign", requestId: next.requestId });
     }
   }
-  function send(text: string) {
-    if (busy) return;
-    const prompt = attachment?.kind === "variant"
-      ? `Feedback on variant ${attachment.id} (${attachment.headline}): ${text}. Prepare a new brief linked to this parent variant; preserve the original ad.`
-      : attachment?.kind === "product"
-        ? `Plan an ad for the already-selected campaign product ${attachment.productId}${attachment.variantId ? ` and exact option ${attachment.variantId}` : ""} (${attachment.label}). My specific direction: ${text}. Use its verified saved product photo, prepare a brief, and wait for my explicit approval before generating.`
-        : text;
-    setInput("");
-    setAttachment(null);
-    setActionError("");
-    void sendMessage({ text: prompt });
-  }
   function feedback(variant: Variant) {
-    setAttachment({ kind: "variant", id: variant.id, headline: variant.brief.headline });
+    if (busy) return;
+    setSelected(variant.id);
     setChatOpen(true);
     setMobileChat(true);
   }
-  async function planProduct(member: import("@/lib/workflow/research/scope").CampaignMember, productTitle: string, optionTitle?: string) {
-    const selected = await action({ action: "selectCampaignMember", ...member });
-    if (!selected) return;
-    setAttachment({
-      kind: "product",
-      productId: member.productId,
-      variantId: member.variantId,
-      label: optionTitle ? `${productTitle} · ${optionTitle}` : productTitle,
-    });
-    setInput("");
-    setChatOpen(true);
-    setMobileChat(true);
+  async function chooseProduct(member: import("@/lib/workflow/research/scope").CampaignMember, productTitle: string) {
+    if (busy) return;
+    setView("setup");
+    setChatOpen(false);
+    setMobileChat(false);
+    setPreparingProduct(productTitle);
+    try { await action({ action: "generateCampaignMember", requestId: crypto.randomUUID(), ...member }); }
+    finally { setPreparingProduct(null); }
   }
   function openBrief() {
     setSection("Ads");
@@ -235,11 +201,17 @@ export function CampaignWorkspace({
   const name = storeName(session);
   const publishedVariants = session.variants.filter(isPublishedVariant);
   const showBrief = session.brief && view === "brief";
+  const setup = session.researchState?.generationIntent;
+  const showCheckpoint = !!setup?.setupPending && !!setup.researchId && view === "setup";
+  const chatVariant = publishedVariants.find(variant => variant.id === selected);
+  const canChat = !!chatVariant && !showCheckpoint && view === "overview";
+  const visibleChat = canChat && chatOpen;
+  const checkpointError = showCheckpoint ? setup?.error : undefined;
   const generating = !!session.researchState?.generationIntent && next?.kind !== "complete";
   const starting = !!pendingGeneration && !session.researchState?.generationIntent && !session.variants.length;
   return (
     <div
-      className={`workspace ${chatOpen ? "" : "chat-closed"} ${mobileChat ? "show-chat" : ""}`}
+      className={`workspace ${visibleChat ? "" : "chat-closed"} ${visibleChat && mobileChat ? "show-chat" : ""}`}
       style={{ "--chat-width": `${chatWidth}px` } as CSSProperties}
     >
       <aside className="sidebar">
@@ -257,7 +229,7 @@ export function CampaignWorkspace({
         </div>
         <p className="nav-label">WORKSPACE</p>
         <nav aria-label="Workspace">
-          {(["Ads", "Assets", "Brand"] as Section[]).map((s, i) => (
+          {(["Ads", "Brand"] as Section[]).map((s, i) => (
             <button
               key={s}
               disabled={busy}
@@ -273,7 +245,7 @@ export function CampaignWorkspace({
                 setMobileChat(false);
               }}
             >
-              <span aria-hidden="true">{["▦", "▧", "◈"][i]}</span>
+              <span aria-hidden="true">{["▦", "◈"][i]}</span>
               {s}
               {s === "Ads" && !!publishedVariants.length && (
                 <small>{publishedVariants.length}</small>
@@ -300,7 +272,7 @@ export function CampaignWorkspace({
           <div className="breadcrumb">
             Workspace <span>/</span> <strong>{section}</strong>
           </div>
-          <div className="topbar-actions">
+          {canChat && <div className="topbar-actions">
             <Button
               className="mobile-switch"
               onClick={() => {
@@ -308,16 +280,16 @@ export function CampaignWorkspace({
                 setChatOpen(true);
               }}
             >
-              {mobileChat ? "Workspace" : "Chat"}
+              {mobileChat ? "Workspace" : "Refine ad"}
             </Button>
             <Button
               className="desktop-chat-toggle"
               aria-expanded={chatOpen}
               onClick={() => setChatOpen(!chatOpen)}
             >
-              {chatOpen ? "Hide chat" : "Show chat"} ☷
+              {chatOpen ? "Hide discussion" : "Refine this ad"} ☷
             </Button>
-          </div>
+          </div>}
         </header>
         <div className="campaign-bar">
           <label className="sr-only" htmlFor="brand-select">
@@ -363,14 +335,29 @@ export function CampaignWorkspace({
           </Button>
         </div>
         <main className="main-scroll">
-          {(actionError || refreshError) && !generating && !starting && (
+          {(actionError || refreshError || checkpointError) && (!generating || showCheckpoint) && !starting && (
             <div role="alert" className="error-box">
-              {actionError || refreshError}
+              {actionError || refreshError || checkpointError}
               {refreshError && <Button disabled={busy} onClick={() => void refresh()}>Refresh saved progress</Button>}
             </div>
           )}
-          {section === "Assets" ? (
-            <AssetsView session={session} />
+          {view === "direction" ? (
+            <>
+              <Button disabled={busy} onClick={() => setView(setup?.setupPending ? "setup" : "overview")}>← Back to your campaign</Button>
+              <CampaignDirection research={session.research!} busy={busy} generate={generate} />
+            </>
+          ) : preparingProduct ? (
+            <section className="card" role="status">
+              <span className="eyebrow">YOUR AD SETUP</span>
+              <h2>Opening {preparingProduct}…</h2>
+              <p className="muted">Loading its saved photos and offers.</p>
+            </section>
+          ) : showCheckpoint ? (
+            <>
+              {!!publishedVariants.length && <Button disabled={busy} onClick={() => setView("overview")}>← Back to your ads</Button>}
+              <CampaignCheckpoint key={`${setup.requestId}:${setup.researchId}`} session={session} busy={busy} action={action} />
+              <Button disabled={busy} onClick={() => setView("direction")}>Choose a different product or collection</Button>
+            </>
           ) : showBrief ? (
             <>
               <Button onClick={() => setView("overview")}>
@@ -389,7 +376,6 @@ export function CampaignWorkspace({
               <ResearchView
               session={session}
               busy={busy}
-              send={send}
               create={() => setView("overview")}
               action={action}
               />
@@ -397,7 +383,7 @@ export function CampaignWorkspace({
           ) : (
             <>
               <div className="actions view-links">
-                <Button onClick={() => setView("research")}>
+                <Button disabled={busy} onClick={() => setView("research")}>
                   Research findings
                 </Button>
                 {session.brief && (
@@ -410,7 +396,7 @@ export function CampaignWorkspace({
                 busy={busy}
                 error={actionError || refreshError}
                 recover={recover}
-                inspect={() => setView("research")}
+                inspect={() => setView(setup?.setupPending ? "setup" : "research")}
                 refresh={() => void refresh()}
                 retryStart={!session.researchState?.generationIntent && pendingGeneration ? () => {
                   void action({ action: "generateCampaign", ...pendingGeneration });
@@ -420,7 +406,7 @@ export function CampaignWorkspace({
               {!!session.variants.length && <AdsView
                 session={session}
                 selected={selected}
-                select={setSelected}
+                select={(id) => { if (!busy) setSelected(id); }}
                 feedback={feedback}
                 create={newCampaign}
                 busy={busy}
@@ -430,7 +416,7 @@ export function CampaignWorkspace({
                 key={session.research.id}
                 research={session.research}
                 busy={busy}
-                plan={(member, productTitle, optionTitle) => void planProduct(member, productTitle, optionTitle)}
+                plan={(member, title) => void chooseProduct(member, title)}
               />}
             </>
           )}
@@ -470,19 +456,15 @@ export function CampaignWorkspace({
             e.currentTarget.releasePointerCapture(e.pointerId)
           }
         />
-        <ChatPanel
+        {canChat && chatVariant && <AdChat
+          key={chatVariant.id}
           session={session}
-          messages={messages}
-          input={input}
-          setInput={setInput}
-          send={send}
-          busy={busy}
-          error={actionError || error?.message || session?.lastError}
-          attachment={attachment}
-          detach={() => setAttachment(null)}
+          variant={chatVariant}
+          busy={navigationBusy || actionBusy || !!session.operationActive}
+          onBusyChange={setChatBusy}
           openBrief={openBrief}
-          refresh={() => void refresh()}
-        />
+          refresh={refresh}
+        />}
       </aside>
     </div>
   );

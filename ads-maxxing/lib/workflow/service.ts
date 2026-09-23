@@ -9,10 +9,10 @@ import { createAd } from "./agents/artist";
 import { reviewAd } from "./agents/reviewer";
 import { DEFAULT_DESIGN, type Stage } from "./creative/schema";
 import { resolveBrandTokens } from "./creative/tokens";
-import { validateCreative } from "./creative/fit";
+import { eligibleOffersForProduct, validateCreative } from "./creative/fit";
 import { adoptBrandContext } from "./research/brand-context";
 import { userResearchIntent } from "./research/intent";
-import { canonicalUrl, pageHint, storeHost } from "./research/extract";
+import { canonicalUrl, pageHint, productIdentityUrl, storeHost } from "./research/extract";
 import { groundBrief } from "./research/grounding";
 import type { Direction, ResearchAsset, ResearchState } from "./research/contracts";
 import { generationSourceSchema, type GenerationSource } from "./generation-contracts";
@@ -65,7 +65,7 @@ export class Workflow {
     if (!this.session.research?.brandKit) throw new WorkflowError("Finish brand setup before generating.", 409);
     if ("choiceId" in source && !this.session.research.suggestions?.some(item => item.id === source.choiceId)) throw new WorkflowError("Choose a current campaign suggestion.", 409);
     this.setResearchState({ stage: this.session.researchState?.stage || "awaiting_direction", direction: this.session.researchState?.direction });
-    this.session.researchState!.generationIntent = { requestId, source, authorizedAt: new Date().toISOString() };
+    this.session.researchState!.generationIntent = { requestId, source, authorizedAt: new Date().toISOString(), setupPending: true };
     await this.deps.save(this.session); // Persist the actual Generate action before any work.
     return this.continueCampaign(requestId);
   }
@@ -76,6 +76,7 @@ export class Workflow {
     const next = campaignNextAction(this.session);
     if (next?.kind === "complete") return this.session;
     if (next?.briefId && next.kind === "retry") throw new WorkflowError(next.message || "Start an explicit new image attempt.", 409);
+    if (intent.setupPending && intent.researchId) return this.session;
     delete intent.pausedReason; delete intent.error;
     try {
       if (!intent.researchId) {
@@ -115,9 +116,20 @@ export class Workflow {
           await this.event("compact_research", "completed", "Saved product facts without storefront HTML. Earlier research remains unchanged.");
         }
         if (this.session.researchState!.stage !== "ready_for_brief") { intent.pausedReason = "needs_input"; intent.error = "Choose a product and a verified photo to continue."; await this.deps.save(this.session); return this.session; }
-        const parent = intent.refinement ? this.session.variants.find(item => item.id === intent.refinement!.variantId) : undefined;
-        if (intent.refinement && !parent) throw new WorkflowError("The original ad for this revision was not found.", 409);
-        const input = parent ? await (this.deps.draftRefinement ?? draftRefinement)(parent, intent.refinement!.feedback) : await (this.deps.draftCampaignBrief ?? draftCampaignBrief)(this.session.research!, this.session.preferences);
+        if (intent.setup?.saleId && !eligibleOffersForProduct(this.session.research!, this.session.research!.campaign!.selectedProductId!).some(item => item.offer.id === intent.setup!.saleId)) {
+          intent.setupPending = true;
+          intent.pausedReason = "needs_input";
+          intent.error = "The selected offer is no longer current for this product. Recheck it or continue without an offer.";
+          await this.deps.save(this.session);
+          return this.session;
+        }
+        const parentId = intent.refinement?.variantId ?? intent.offerChange?.variantId;
+        const parent = parentId ? this.session.variants.find(item => item.id === parentId) : undefined;
+        if (parentId && !parent) throw new WorkflowError("The original ad for this revision was not found.", 409);
+        const input = intent.offerChange && parent
+          ? { ...parent.brief, saleId: intent.offerChange.saleId, variation: "auto" as const, feedback: intent.offerChange.saleId ? "Use the selected offer." : "Remove the offer.", parentVariantId: parent.id }
+          : parent ? await (this.deps.draftRefinement ?? draftRefinement)(parent, intent.refinement!.feedback)
+          : await (this.deps.draftCampaignBrief ?? draftCampaignBrief)(this.session.research!, this.session.preferences, intent.setup);
         const brief = await this.proposeBrief(input, "campaign_generate");
         intent.briefId = brief.id;
         await this.deps.save(this.session);
@@ -184,13 +196,74 @@ export class Workflow {
     return next;
   }
 
+  async prepareChatRevision(input: BriefInput, targetVariantId: string) {
+    const target = this.session.variants.find(item => item.id === targetVariantId);
+    if (!target) throw new WorkflowError("The ad being discussed was not found.", 404);
+    if (input.productId !== target.brief.productId || (input.variantId ?? null) !== (target.brief.variantId ?? null) || input.parentVariantId !== targetVariantId) throw new WorkflowError("This revision must stay attached to the selected ad and product.", 409);
+    const active = campaignNextAction(this.session);
+    if (active && active.kind !== "complete" && !this.session.researchState?.generationIntent?.setupPending) throw new WorkflowError("Finish the current creative before preparing another revision.", 409);
+    await this.selectCampaignMember(target.brief.productId!, target.brief.variantId ?? null);
+    delete this.session.researchState?.generationIntent;
+    return this.proposeBrief(input);
+  }
+
   async generateCampaignMember(requestId: string, productId: string, variantId: string | null = null) {
     if (this.session.researchState?.generationIntent?.requestId === requestId) return this.session;
     await this.selectCampaignMember(productId, variantId);
     const research = this.session.research!;
-    this.session.researchState!.generationIntent = { requestId, source: { direction: research.campaign!.direction!.text }, researchId: research.id, authorizedAt: new Date().toISOString() };
+    this.session.researchState!.generationIntent = { requestId, source: { direction: research.campaign!.direction!.text }, researchId: research.id, authorizedAt: new Date().toISOString(), setupPending: true };
     await this.deps.save(this.session);
-    return this.continueCampaign(requestId);
+    return this.session;
+  }
+
+  private researchWithOfferChoice(research: Research, productId: string, saleId: string | null, confirmOffer = false): Research {
+    if (!saleId) return research;
+    const offer = research.offers?.find(item => item.id === saleId);
+    const sale = research.sales.find(item => item.id === saleId);
+    if (!offer || !sale || sale.quote !== offer.quote || canonicalUrl(sale.sourceUrl) !== canonicalUrl(offer.sourceUrl)) throw new WorkflowError("This offer no longer matches its saved source. Choose a current offer or no offer.", 409);
+    const now = Date.now(), checked = Date.parse(offer.checkedAt), ends = offer.endsAt ? Date.parse(offer.endsAt) : null;
+    if (!Number.isFinite(checked) || checked > now + 300_000 || now - checked > 86_400_000 || ends !== null && (!Number.isFinite(ends) || ends <= now)) throw new WorkflowError("This offer is stale or expired. Research it again or choose no offer.", 409);
+    const next = structuredClone(research);
+    if (confirmOffer) {
+      const selected = next.offers!.find(item => item.id === saleId)!;
+      selected.eligibility = "eligible";
+      selected.productIds = [...new Set([...selected.productIds, productId])];
+      selected.confirmedAt = new Date().toISOString(); selected.confirmationOrigin = "user_supplied";
+      next.id = randomUUID(); next.revision = (next.revision || 0) + 1;
+    }
+    if (!eligibleOffersForProduct(next, productId).some(item => item.offer.id === saleId)) throw new WorkflowError("Confirm this offer for the product, or choose no offer.", 409);
+    return next;
+  }
+
+  async confirmCampaignSetup(requestId: string, productId: string, variantId: string | null, referenceAssetId: string, saleId: string | null, confirmOffer = false) {
+    const intent = this.session.researchState?.generationIntent;
+    if (!intent || intent.requestId !== requestId) throw new WorkflowError("This campaign request changed. Reload before continuing.", 409);
+    if (!intent.setupPending) {
+      const selected = this.session.research?.campaign;
+      if (intent.setup?.referenceAssetId === referenceAssetId && intent.setup.saleId === saleId && selected?.selectedProductId === productId && (selected.selectedVariantId ?? null) === variantId) return this.session;
+      throw new WorkflowError("This setup was already confirmed with different choices.", 409);
+    }
+    this.assertResearchEditable();
+    const current = this.session.research;
+    if (!current || !intent.researchId || current.id !== intent.researchId || !current.campaign) throw new WorkflowError("Finish campaign research before confirming its setup.", 409);
+    const members = scopeForCampaign(current.campaign, current.products || []).members;
+    if (!members.some(member => member.productId === productId && member.variantId === variantId)) throw new WorkflowError("Include this product or variant in the campaign first.", 409);
+    const ready = memberReferenceReadiness({ productId, variantId }, current.products || [], current.assets || []);
+    if (!ready.referenceAssetIds.includes(referenceAssetId)) throw new WorkflowError("Choose a verified photo for this exact product or variant.", 409);
+    const directionUrl = current.campaign.direction?.url;
+    const requestedVariant = directionUrl && productIdentityUrl(directionUrl) === productIdentityUrl(current.products!.find(item => item.id === productId)!.canonicalUrl) ? new URL(directionUrl).searchParams.get("variant") : null;
+    if (requestedVariant && current.products?.find(item => item.id === productId)?.variants.find(item => item.storeId === requestedVariant)?.id !== variantId) throw new WorkflowError("The supplied URL selects a specific variant. Choose its verified photo.", 409);
+    const next = this.researchWithOfferChoice(current, productId, saleId, confirmOffer);
+    this.session.research = next === current ? { ...structuredClone(current), id: randomUUID(), revision: (current.revision || 0) + 1 } : next;
+    const campaign = this.session.research!.campaign!;
+    campaign.selectedProductId = productId; campaign.selectedVariantId = variantId; campaign.status = "ready_for_brief";
+    this.session.researchState!.stage = "ready_for_brief";
+    intent.researchId = this.session.research!.id;
+    intent.setup = { referenceAssetId, saleId }; intent.setupPending = false;
+    delete intent.pausedReason; delete intent.error;
+    delete this.session.brief;
+    await this.event("confirm_campaign_setup", "completed", productId);
+    return this.session;
   }
 
   async refineAd(requestId: string, variantId: string, feedback: string) {
@@ -230,6 +303,33 @@ export class Workflow {
     this.session.researchState!.generationIntent.briefId = brief.id;
     await this.deps.save(this.session);
     return this.session;
+  }
+
+  async changeAdOffer(requestId: string, variantId: string, saleId: string | null, confirmOffer = false) {
+    const currentIntent = this.session.researchState?.generationIntent;
+    if (currentIntent?.requestId === requestId) {
+      if (currentIntent.offerChange?.saleId === saleId && currentIntent.offerChange.variantId === variantId) return this.session;
+      throw new WorkflowError("This request belongs to another offer change.", 409);
+    }
+    const parent = this.session.variants.find(item => item.id === variantId);
+    if (!parent) throw new WorkflowError("Ad not found.", 404);
+    const research = this.session.research;
+    if (!research?.campaign || !parent.brief.productId) throw new WorkflowError("Research this product before changing its offer.", 409);
+    const member = { productId: parent.brief.productId, variantId: parent.brief.variantId ?? null };
+    if (!scopeForCampaign(research.campaign, research.products || []).members.some(item => item.productId === member.productId && item.variantId === member.variantId)) throw new WorkflowError("This ad's product is no longer included. Include it in the campaign first.", 409);
+    const nextOfferResearch = this.researchWithOfferChoice(research, member.productId, saleId, confirmOffer);
+    await this.selectCampaignMember(member.productId, member.variantId);
+    if (nextOfferResearch !== research) {
+      const next = structuredClone(this.session.research!);
+      next.offers = nextOfferResearch.offers;
+      next.id = randomUUID(); next.revision = (next.revision || 0) + 1;
+      this.session.research = next;
+      this.updatedResearch(next);
+    }
+    const source = { direction: this.session.research!.campaign?.direction?.text || parent.brief.direction } as const;
+    this.session.researchState!.generationIntent = { requestId, source, researchId: this.session.research!.id, authorizedAt: new Date().toISOString(), offerChange: { variantId, saleId } };
+    await this.deps.save(this.session);
+    return this.continueCampaign(requestId);
   }
 
   private async event(action: string, status: "started" | "completed" | "failed", detail?: string) {

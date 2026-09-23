@@ -7,6 +7,8 @@ export type WorkflowAction =
   | { action: "setCampaignScope"; members: import("@/lib/workflow/research/scope").CampaignMember[] }
   | { action: "selectCampaignMember"; productId: string; variantId: string | null }
   | { action: "generateCampaignMember"; requestId: string; productId: string; variantId: string | null }
+  | { action: "confirmCampaignSetup"; requestId: string; productId: string; variantId: string | null; referenceAssetId: string; saleId: string | null; confirmOffer?: boolean }
+  | { action: "changeAdOffer"; requestId: string; variantId: string; saleId: string | null; confirmOffer?: boolean }
   | { action: "refineAd"; requestId: string; variantId: string; feedback: string }
   | { action: "regenerateAd"; requestId: string; variantId: string }
   | { action: "retryCreative"; requestId: string; previousRequestId: string; briefId: string; acknowledgePossibleDuplicate?: boolean }

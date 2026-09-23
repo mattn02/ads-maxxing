@@ -9,6 +9,7 @@ export function campaignNextAction(session: Session): NextAction | undefined {
   if (!intent.researchId && !leaseActive && session.events?.some(event => event.action === "research" && event.status === "started" && Date.parse(event.at) >= Date.parse(intent.authorizedAt))) {
     return { ...base, kind: "retry", message: "Research started, but its final checkpoint was not saved. Saved findings are retained. Retry this step explicitly to continue." };
   }
+  if (intent.setupPending && intent.researchId && intent.pausedReason !== "failure") return { ...base, kind: "needs_input", message: intent.error || "Choose a product photo and optional offer to make this ad." };
   const variant = session.variants.find(item => item.id === intent.briefId);
   if (variant) {
     if (variant.status === "pending_review") return { ...base, kind: intent.pausedReason === "failure" ? "retry" : "continue", message: "Your ad is saved. Finish its review." };

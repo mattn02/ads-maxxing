@@ -1,9 +1,9 @@
 import { authenticated, persistenceContext, ownerContext } from "@/lib/supabase/server";
-import { userResearchIntent } from "@/lib/workflow/research/intent";
 import { randomUUID } from "node:crypto";
 import { createAgentUIStreamResponse } from "ai";
 import { z } from "zod";
 import { createConcierge } from "@/lib/workflow/agents/concierge";
+import { mergeVariantTurn, messagesForVariant, tagMessageForVariant } from "@/lib/workflow/chat-scope";
 import { conciergeText } from "@/lib/workflow/concierge-stream";
 import { Workflow } from "@/lib/workflow/service";
 import { loadSession, lockSession, saveSession } from "@/lib/workflow/sessions";
@@ -12,6 +12,7 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 const requestSchema = z.object({
   id: z.string(),
+  variantId: z.string().min(1),
   message: z.object({ id: z.string().min(1).max(100), role: z.literal("user"), parts: z.array(z.object({ type: z.literal("text"), text: z.string().trim().min(1).max(8000) })).min(1).max(1) }),
 });
 export async function POST(request: Request) {
@@ -20,27 +21,27 @@ export async function POST(request: Request) {
   try {
     const parsed = requestSchema.safeParse(await request.json());
     if (!parsed.success) throw new WorkflowError("Send a session ID and a text-only user message.");
-    const { id, message } = parsed.data;
+    const { id, variantId, message } = parsed.data;
     release = await lockSession(id);
     const session = await loadSession(id);
     if (session.purpose !== "campaign" || !session.research?.brandKit) throw new WorkflowError("Finish brand setup and choose Make creatives first.", 409);
+    const target = session.variants.find(variant => variant.id === variantId && !!variant.imageUrl);
+    if (!target) throw new WorkflowError("That ad is no longer available. Refresh your workspace.", 409);
     // The server owns history. Clients cannot inject assistant messages or approval state.
     if (session.messages.some(item => item.id === message.id)) throw new WorkflowError("This message was already submitted. Reload the session before trying again.", 409);
-    const intent = userResearchIntent(message.parts[0].text, message.id, session.research);
-    if (intent.choiceId && !intent.direction) throw new WorkflowError("This direction is no longer available. Choose from the current campaign.", 409);
     const workflow = new Workflow(session);
     workflow.setUserInput(message.parts[0].text, message.id);
-    const agent = createConcierge(workflow);
+    const agent = createConcierge(workflow, undefined, target);
     delete session.lastError;
-    session.messages.push(message);
+    session.messages.push(tagMessageForVariant(message, variantId));
     await saveSession(session);
-    // Keep full history on disk; bounded recent turns keep PoC token costs predictable.
-    const history = session.messages.slice(-12);
-    const earlier = session.messages.slice(0, -history.length);
+    // The stored campaign still contains every conversation. Only this ad's turns reach the model.
+    const history = messagesForVariant(session.messages, variantId).slice(-12);
     const unlock = release;
     const context = ownerContext();
     return await createAgentUIStreamResponse({
       agent, uiMessages: history, timeout: 300000, generateMessageId: randomUUID, sendReasoning: false,
+      messageMetadata: () => ({ variantId }),
       experimental_transform: conciergeText(agent.responseText),
       onError: error => {
         const detail = safeError(error);
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
       },
       onEnd: async ({ messages }) => persistenceContext.run(context, async () => {
         await agent.waitForTools();
-        session.messages = [...earlier, ...messages];
+        session.messages = mergeVariantTurn(session.messages, history, messages, variantId);
         await saveSession(session);
       }),
       // Finish saving even if a browser disconnects; never start another paid request.

@@ -14,6 +14,7 @@ import {
   type WorkflowAction,
 } from "@/lib/workspace/api";
 import { Badge, Button, EmptyState, SectionHeading } from "./ui";
+import { offerIssue } from "./campaign-checkpoint";
 export function CampaignForm({
   session,
   busy,
@@ -403,7 +404,7 @@ export function AdsView({
               {criteria.map((criterion) => <p className="review-finding" key={criterion.label}><strong>{criterion.label} · {criterion.status === "uncertain" ? "Check this" : "Suggested change"}</strong><br />{criterion.reason}</p>)}
               {variant.review?.checks.filter((check) => !check.passed).map((check) => <p className="review-finding" key={check.name}><strong>{check.name}</strong><br />{check.detail}</p>)}
               <p className="muted small">
-                {variant.acceptance ? `Accepted on ${new Date(variant.acceptance.acceptedAt).toLocaleString()}. Automated feedback is kept with this version.` : "Automated feedback is advisory. Accept this version, edit it with feedback, or generate a fresh visual."}
+                {variant.acceptance ? `Accepted on ${new Date(variant.acceptance.acceptedAt).toLocaleString()}. Automated feedback is kept with this version.` : "Automated feedback is advisory. Accept this version, refine it in chat, or generate a fresh visual."}
               </p>
               <div className="actions">
                 <Button
@@ -415,6 +416,7 @@ export function AdsView({
                 >
                   {variant.status === "approved" ? "Accepted ✓" : "Accept ad"}
                 </Button>
+                <Button disabled={busy} onClick={() => feedback(variant)}>Refine this ad →</Button>
                 <Button
                   disabled={busy}
                   onClick={() => void action({ action: "regenerateAd", requestId: crypto.randomUUID(), variantId: variant.id })}
@@ -444,10 +446,9 @@ export function AdsView({
                 <img className="reference" src={variant.sourceAssetId ? `/api/assets/${variant.sourceAssetId}` : variant.referenceImage} alt="Saved original product for comparison" />
                 <p className="small muted">Compare the shape, colors, branding, and visible product details.</p>
                 {variant.review?.checks.map((check) => <p className="small" key={check.name}>{check.passed ? "✓" : "!"} <strong>{check.name}</strong> — {check.detail}</p>)}
-                <Button disabled={busy} onClick={() => feedback(variant)}>Discuss this ad in chat</Button>
               </details>
             </div>
-            <RefinementForm key={variant.id} variantId={variant.id} busy={busy} action={action} />
+            <ChangeOffer key={variant.id} variant={variant} session={session} busy={busy} action={action} />
             <div className="card">
               <h2>Version history</h2>
               {history.map((v, i) => (
@@ -578,21 +579,36 @@ function AdPreviewImage({ src, alt, frameClassName, priority = false }: {
   );
 }
 
-function RefinementForm({ variantId, busy, action }: {
-  variantId: string;
+function ChangeOffer({ variant, session, busy, action }: {
+  variant: Variant;
+  session: Session;
   busy: boolean;
   action: (value: WorkflowAction) => Promise<boolean>;
 }) {
-  const [feedback, setFeedback] = useState("");
-  return <form className="card ad-refinement" onSubmit={async (event) => {
-    event.preventDefault();
-    if (busy || !feedback.trim()) return;
-    if (await action({ action: "refineAd", requestId: crypto.randomUUID(), variantId, feedback: feedback.trim() })) setFeedback("");
-  }}>
-    <h2>Edit with feedback</h2>
-    <label htmlFor={`feedback-${variantId}`}>What would you change?</label>
-    <textarea id={`feedback-${variantId}`} value={feedback} onChange={(event) => setFeedback(event.target.value)} rows={3} maxLength={2000} disabled={busy} placeholder="Shorten the headline, use a warmer background…" />
-    <p className="small muted">Creates a new version and keeps this one.</p>
-    <Button primary disabled={busy || !feedback.trim()}>Edit & create revision →</Button>
-  </form>;
+  const [saleId, setSaleId] = useState<string | null>(variant.brief.saleId ?? null);
+  const [confirmed, setConfirmed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const offers = session.research?.offers ?? [];
+  const selectedOffer = offers.find((offer) => offer.id === saleId);
+  const selectedOfferUnavailable = selectedOffer ? offerIssue(selectedOffer) : null;
+  const currentOffer = (session.research?.offers ?? []).find((offer) => offer.id === variant.brief.saleId);
+  return <details className="card ad-offer">
+    <summary>Change offer{currentOffer ? ` · ${currentOffer.displayCopy}` : " · No offer"}</summary>
+    <p className="small muted">Choose an offer for a new ad version. The current version stays available.</p>
+    <div role="group" aria-label="Offers for this ad">
+      {!offers.length && <p className="small muted">No supported offers found for this product.</p>}
+      <label className="checkpoint-offer"><input type="radio" name={`offer-${variant.id}`} checked={!saleId} disabled={busy || submitting} onChange={() => { setSaleId(null); setConfirmed(false); }} /> No offer</label>
+      {offers.map((offer) => <label className="checkpoint-offer" key={offer.id}>
+        <input type="radio" name={`offer-${variant.id}`} checked={saleId === offer.id} disabled={busy || submitting || !!offerIssue(offer)} onChange={() => { setSaleId(offer.id); setConfirmed(false); }} />
+        <span><strong>{offer.displayCopy}</strong>{offer.restrictions && offer.restrictions !== offer.displayCopy && <small>Terms: {offer.restrictions}</small>}<small>Store wording: “{offer.quote}”</small>{offerIssue(offer) && <small className="checkpoint-offer-unavailable">{offerIssue(offer)} Research this offer again to use it.</small>}<small>Source: <a href={offer.sourceUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>{new URL(offer.sourceUrl).hostname}</a></small></span>
+      </label>)}
+    </div>
+    {saleId && <label className="checkpoint-confirm"><input type="checkbox" checked={confirmed} disabled={busy || submitting} onChange={(event) => setConfirmed(event.target.checked)} /> I confirm this offer is still valid, applies to this product, and the target customers meet all its terms.</label>}
+    <Button disabled={busy || submitting || saleId === (variant.brief.saleId ?? null) || (!!saleId && (!confirmed || !!selectedOfferUnavailable))} onClick={async () => {
+      if (saleId === (variant.brief.saleId ?? null) || (saleId && (!confirmed || selectedOfferUnavailable))) return;
+      setSubmitting(true);
+      try { await action({ action: "changeAdOffer", requestId: crypto.randomUUID(), variantId: variant.id, saleId, ...(saleId ? { confirmOffer: true } : {}) }); }
+      finally { setSubmitting(false); }
+    }}>{submitting ? "Creating version…" : "Create version with this offer →"}</Button>
+  </details>;
 }

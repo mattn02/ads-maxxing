@@ -1319,3 +1319,8 @@ input[type="checkbox"] {
   .setup-workspace .nav-item { width: auto; font-size: 12px; padding: 8px 12px; margin: 0; }
   .campaign-bar { flex-wrap: wrap; gap: 8px; }
 }
+
+/* Keep the active ad visible while discussing a revision. */
+.chat-target-image { width: 40px; height: 56px; flex: 0 0 40px; object-fit: cover; border: 1px solid var(--border); border-radius: 5px; }
+.chat-heading > div:last-child { min-width: 0; }
+.chat-heading p { overflow-wrap: anywhere; }

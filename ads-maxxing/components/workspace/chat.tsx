@@ -1,12 +1,11 @@
 import { useEffect, useRef } from "react";
+import Image from "next/image";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ConciergeMessage } from "@/lib/workflow/agents/concierge";
-import type { Session } from "@/lib/workflow/session-types";
+import type { Session, Variant } from "@/lib/workflow/session-types";
+import { groupVariants } from "@/lib/workspace/api";
 import { Badge, Button } from "./ui";
-export type ChatAttachment =
-  | { kind: "variant"; id: string; headline: string }
-  | { kind: "product"; productId: string; variantId: string | null; label: string };
 const toolLabels: Record<string, string> = {
   research: "Researching your brand",
   prepareBrief: "Preparing the creative brief",
@@ -22,10 +21,9 @@ export function ChatPanel({
   send,
   busy,
   error,
-  attachment,
-  detach,
   openBrief,
   refresh,
+  variant,
 }: {
   session: Session | null;
   messages: ConciergeMessage[];
@@ -34,12 +32,13 @@ export function ChatPanel({
   send: (s: string) => void;
   busy: boolean;
   error?: string;
-  attachment: ChatAttachment | null;
-  detach: () => void;
   openBrief: () => void;
   refresh: () => void;
+  variant?: Variant;
 }) {
   const end = useRef<HTMLDivElement>(null);
+  const history = variant ? groupVariants(session?.variants ?? []).find(group => group.some(item => item.id === variant.id)) : undefined;
+  const version = history?.findIndex(item => item.id === variant?.id) ?? -1;
   useEffect(() => {
     if (messages.length === 1 && messages[0].role === "assistant") return;
     end.current?.scrollIntoView({ block: "nearest" });
@@ -47,13 +46,19 @@ export function ChatPanel({
   return (
     <>
       <div className="chat-heading">
-        <div className="partner-icon">✧</div>
+        {variant ? <Image src={variant.imageUrl} alt="" width={32} height={32} unoptimized className="chat-target-image" /> : <div className="partner-icon">✧</div>}
         <div>
-          <strong>Creative partner</strong>
-          <p className="muted small">A little direction. A lot of ideas.</p>
+          <strong>{variant ? "Refine this ad" : "Creative partner"}</strong>
+          <p className="muted small">{variant ? `${variant.research.products?.find(product => product.id === variant.brief.productId)?.title ?? variant.brief.productUrl} · Version ${version + 1} of ${history?.length ?? 1}` : "A little direction. A lot of ideas."}</p>
         </div>
       </div>
       <div className="chat-messages" aria-label="Conversation">
+        {variant && messages.length === 0 && (
+          <div className="chat-empty">
+            <strong>What would you change?</strong>
+            <p className="small muted">Ask for a shorter headline, a different setting, or another detail of this ad. You’ll review the new brief before generating a version.</p>
+          </div>
+        )}
         {messages.map((m) => (
           <div key={m.id} className={`message ${m.role}`}>
             <span className="message-author">
@@ -92,6 +97,7 @@ export function ChatPanel({
               const detail = output && typeof output === "object" && "error" in output && typeof output.error === "string"
                 ? output.error
                 : "errorText" in p && typeof p.errorText === "string" ? p.errorText : null;
+              const detailInReply = detail && m.parts.some(part => part.type === "text" && part.text.includes(detail));
               const running = busy && m.id === messages.at(-1)?.id;
               return (
                 <div className="activity-card" key={i}>
@@ -104,7 +110,7 @@ export function ChatPanel({
                     </strong>
                     <p className="small muted">
                       {failed
-                        ? detail || "Couldn’t complete this step. Try again when you’re ready."
+                        ? detailInReply ? "This step wasn’t completed." : detail || "Couldn’t complete this step. Try again when you’re ready."
                         : complete
                           ? "Saved to your workspace"
                           : running ? "In progress" : "Interrupted. Refresh saved state before trying again."}
@@ -115,24 +121,10 @@ export function ChatPanel({
             })}
           </div>
         ))}
-        {!!session?.events.some(event => event.action.startsWith("research:")) && (
-          <details className="activity-card research-activity">
-            <summary>Research activity</summary>
-            <ol className="small" aria-live="polite">
-              {session.events.filter(event => event.action.startsWith("research:")).slice(-18).map((event, index) => (
-                <li key={`${event.at}-${index}`}>
-                  <time>{new Date(event.at).toLocaleTimeString()}</time>{" · "}
-                  {event.status === "failed" ? "Failed" : event.status === "completed" ? "Done" : "Started"}{" · "}
-                  {event.detail}
-                </li>
-              ))}
-            </ol>
-          </details>
-        )}
-        {session?.brief && (
+        {session?.brief && (!variant || (session.brief.parentVariantId === variant.id && !session.variants.some(saved => saved.brief.id === session.brief?.id))) && (
           <div className="chat-brief">
             <Badge tone="warning">
-              {session.researchState?.generationIntent
+              {variant ? "Your review needed" : session.researchState?.generationIntent
                 ? "Campaign creative"
                 : session.brief.generationAttemptedAt
                 ? "Generation attempted"
@@ -144,7 +136,7 @@ export function ChatPanel({
             <p className="muted small">
               You can adjust the product photo, headline, and creative direction.
             </p>
-            <Button disabled={busy} onClick={openBrief}>Edit creative details →</Button>
+            <Button disabled={busy} onClick={openBrief}>{variant ? "Review proposed changes →" : "Edit creative details →"}</Button>
           </div>
         )}
         {busy && (
@@ -169,27 +161,6 @@ export function ChatPanel({
           if (input.trim()) send(input);
         }}
       >
-        {attachment && (
-          <div className="attachment">
-            <span>
-              {attachment.kind === "variant"
-                ? `Feedback on: ${attachment.headline}`
-                : `Planning for: ${attachment.label}`}
-              <small>
-                {attachment.kind === "variant"
-                  ? attachment.id.slice(0, 8)
-                  : "Campaign product"}
-              </small>
-            </span>
-            <button
-              type="button"
-              aria-label="Remove feedback attachment"
-              onClick={detach}
-            >
-              ×
-            </button>
-          </div>
-        )}
         <label className="sr-only" htmlFor="chat-message">
           Message your creative partner
         </label>
@@ -199,9 +170,7 @@ export function ChatPanel({
           value={input}
           maxLength={8000}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={attachment?.kind === "product"
-            ? "What angle should this product ad take?"
-            : "Share a thought or a new direction…"}
+          placeholder="What would you change about this ad?"
         />
         <div className="composer-footer">
           <span className="muted small">
@@ -216,7 +185,7 @@ export function ChatPanel({
           </Button>
         </div>
       </form>
-      <p className="chat-footnote">Generated ads always need your approval.</p>
+      <p className="chat-footnote">New versions need your approval before generation.</p>
     </>
   );
 }

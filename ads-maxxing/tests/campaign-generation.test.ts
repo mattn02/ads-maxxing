@@ -8,6 +8,7 @@ import { publicSession } from "../lib/workflow/public-session";
 import { researchStateSchema } from "../lib/workflow/research/contracts";
 import type { Research, Session, Source } from "../lib/workflow/session-types";
 import { createCampaignScope } from "../lib/workflow/research/scope";
+import { draftCampaignBrief } from "../lib/workflow/campaign-brief";
 
 const source: Source = { url: "https://store.example/products/case", title: "Case", description: "A real red case", images: ["https://store.example/case.png"], markdown: "A real red case.", fetchedAt: "now", colors: {} };
 function fixture(prepareResearch?: (research: Research) => void) {
@@ -20,7 +21,7 @@ function fixture(prepareResearch?: (research: Research) => void) {
   const deps: WorkflowDependencies = {
     now: () => time, save: async value => { if (fail.reservation && value.brief?.sceneCheckpoint?.state === "attempted") { fail.reservation = false; throw new Error("reservation save timed out"); } stored = structuredClone(value); }, readVisual: async () => null, readAsset: async () => Buffer.from("saved"), pinSourceAsset: async () => "saved-source",
     research: async (_input, options) => { counts.research++; if (fail.research) throw new Error("research unavailable"); const next = productResearch(source); next.brandKit = session.research!.brandKit; next.id = randomUUID(); prepareResearch?.(next); await options?.checkpoint?.(next); return next; },
-    draftCampaignBrief: async research => { counts.draft++; if (fail.draft) throw new Error("model unavailable"); const product = research.products!.find(item => item.id === research.campaign!.selectedProductId)!; const asset = research.assets!.find(item => item.eligibleAsProductReference && item.productIds.includes(product.id))!; return { design: structuredClone(DEFAULT_DESIGN), productId: product.id, variantId: research.campaign?.selectedVariantId, referenceAssetId: asset.id, productUrl: product.canonicalUrl, referenceImage: asset.originalUrl, headline: "Good grip", cta: "Shop now", direction: "Studio", saleId: null, parentVariantId: null, feedback: "" }; },
+    draftCampaignBrief: async (research, _preferences, setup) => { counts.draft++; if (fail.draft) throw new Error("model unavailable"); const product = research.products!.find(item => item.id === research.campaign!.selectedProductId)!; const asset = research.assets!.find(item => item.id === setup?.referenceAssetId) ?? research.assets!.find(item => item.eligibleAsProductReference && item.productIds.includes(product.id))!; return { design: structuredClone(DEFAULT_DESIGN), productId: product.id, variantId: research.campaign?.selectedVariantId, referenceAssetId: asset.id, productUrl: product.canonicalUrl, referenceImage: asset.originalUrl, headline: "Good grip", cta: "Shop now", direction: "Studio", saleId: setup?.saleId ?? null, parentVariantId: null, feedback: "" }; },
     draftRefinement: async (parent, feedback) => { counts.draft++; if (fail.draft) throw new Error("model unavailable"); return { ...parent.brief, headline: "A fresh perspective", feedback, parentVariantId: parent.id, variation: "auto" }; },
     createAd: async (brief, _research, execution) => {
       for (const stage of ["scene"] as Stage[]) {
@@ -38,13 +39,113 @@ function fixture(prepareResearch?: (research: Research) => void) {
   return { get workflow() { return workflow; }, counts, fail, reload: () => { workflow = new Workflow(structuredClone(stored), deps); return workflow; } };
 }
 const input = { direction: "Promote https://store.example/products/case" };
+function withOffer(research: Research) {
+  const id = "offer-1", quote = "Save 10% on cases. Terms apply.";
+  research.sales.push({ id, description: "Member offer", quote, sourceUrl: source.url });
+  research.offers!.push({ id, sourceUrl: source.url, quote, displayCopy: quote, restrictions: "Terms apply.", productIds: [], checkedAt: new Date().toISOString(), eligibility: "unresolved", endsAt: null });
+}
+async function confirmReady(workflow: Workflow, requestId: string) {
+  const research = workflow.session.research;
+  const productId = research?.campaign?.selectedProductId;
+  if (!productId || !research?.assets) return;
+  const variantId = research.campaign?.selectedVariantId ?? null;
+  const asset = research.assets.find(item => item.eligibleAsProductReference && item.classification === "verified_structure" && item.productIds.includes(productId) && (!variantId || item.variantIds.includes(variantId)));
+  if (asset) await workflow.confirmCampaignSetup(requestId, productId, variantId, asset.id, null);
+}
+
+test("research pauses before drafting and setup validates the exact photo without partial mutation", async () => {
+  const h = fixture(research => {
+    const product = research.products![0], photo = research.assets!.find(asset => asset.eligibleAsProductReference)!;
+    const second = { ...structuredClone(photo), id: "second-photo", originalUrl: "https://store.example/second.png" };
+    research.assets!.push(second); product.assetIds.push(second.id);
+  });
+  const id = randomUUID(); await h.workflow.generateCampaign(id, input);
+  assert.equal(h.counts.draft, 0); assert.equal(h.counts.scene, 0);
+  assert.equal(publicSession(h.workflow.session).nextAction?.kind, "needs_input");
+  await h.reload().continueCampaign(id); assert.equal(h.counts.draft, 0);
+  const before = structuredClone(h.workflow.session), research = before.research!, product = research.products![0];
+  await assert.rejects(h.workflow.confirmCampaignSetup(randomUUID(), product.id, null, "second-photo", null), /changed/);
+  await assert.rejects(h.workflow.confirmCampaignSetup(id, product.id, null, "invented", null), /verified photo/);
+  assert.deepEqual(h.workflow.session, before);
+  await h.workflow.confirmCampaignSetup(id, product.id, null, "second-photo", null);
+  await h.workflow.confirmCampaignSetup(id, product.id, null, "second-photo", null);
+  await assert.rejects(h.workflow.confirmCampaignSetup(id, product.id, null, before.research!.assets![0].id, null), /already confirmed/);
+  await h.reload().continueCampaign(id);
+  assert.equal(h.workflow.session.brief?.referenceAssetId, "second-photo");
+  assert.equal(h.workflow.session.brief?.saleId, null);
+});
+
+test("selected offer is confirmed for the product and survives the generation handoff", async () => {
+  const h = fixture(withOffer), id = randomUUID(); await h.workflow.generateCampaign(id, input);
+  const research = h.workflow.session.research!, product = research.products![0], photo = research.assets!.find(asset => asset.eligibleAsProductReference)!;
+  await assert.rejects(h.workflow.confirmCampaignSetup(id, product.id, null, photo.id, "offer-1"), /Confirm this offer/);
+  await h.workflow.confirmCampaignSetup(id, product.id, null, photo.id, "offer-1", true);
+  assert.equal(h.workflow.session.research!.offers![0].confirmationOrigin, "user_supplied");
+  await h.reload().continueCampaign(id);
+  assert.equal(h.workflow.session.brief?.saleId, "offer-1");
+  await h.reload().continueCampaign(id);
+  assert.equal(h.workflow.session.variants[0].brief.saleId, "offer-1");
+});
+
+test("an offer that expires after setup returns to the checkpoint before drafting", async () => {
+  const h = fixture(withOffer), id = randomUUID(); await h.workflow.generateCampaign(id, input);
+  const research = h.workflow.session.research!, product = research.products![0], photo = research.assets!.find(asset => asset.eligibleAsProductReference)!;
+  await h.workflow.confirmCampaignSetup(id, product.id, null, photo.id, "offer-1", true);
+  h.workflow.session.research!.offers![0].endsAt = new Date(Date.now() - 1000).toISOString();
+  await assert.rejects(draftCampaignBrief(h.workflow.session.research!, {}, { referenceAssetId: photo.id, saleId: "offer-1" }), /Recheck it or continue without an offer/);
+  await h.workflow.continueCampaign(id);
+  assert.equal(h.counts.draft, 0);
+  assert.equal(h.workflow.session.researchState?.generationIntent?.setupPending, true);
+  assert.match(publicSession(h.workflow.session).nextAction?.message ?? "", /Recheck it or continue without an offer/);
+  await h.workflow.confirmCampaignSetup(id, product.id, null, photo.id, null);
+  await h.reload().continueCampaign(id);
+  assert.equal(h.workflow.session.brief?.saleId, null);
+});
+
+test("change offer makes an immutable copy revision and reuses the saved scene", async () => {
+  const h = fixture(withOffer), id = randomUUID(); await h.workflow.generateCampaign(id, input);
+  const research = h.workflow.session.research!, product = research.products![0], photo = research.assets!.find(asset => asset.eligibleAsProductReference)!;
+  await h.workflow.confirmCampaignSetup(id, product.id, null, photo.id, null);
+  await h.reload().continueCampaign(id); await h.reload().continueCampaign(id);
+  const original = structuredClone(h.workflow.session.variants[0]), changeId = randomUUID();
+  await h.workflow.changeAdOffer(changeId, original.id, "offer-1", true);
+  assert.equal(h.workflow.session.brief?.saleId, "offer-1");
+  assert.equal(h.workflow.session.brief?.headline, original.brief.headline);
+  assert.equal(h.workflow.session.brief?.executionPlan?.scene.action, "reuse");
+  await h.reload().continueCampaign(changeId);
+  const child = h.workflow.session.variants[1];
+  assert.equal(child.brief.saleId, "offer-1"); assert.equal(child.brief.parentVariantId, original.id);
+  assert.deepEqual(h.workflow.session.variants[0], original);
+  assert.equal(h.counts.scene, 1);
+  await h.workflow.changeAdOffer(changeId, original.id, "offer-1", true);
+  assert.equal(h.workflow.session.variants.length, 2);
+  await assert.rejects(h.workflow.changeAdOffer(changeId, original.id, null), /another offer change/);
+});
+
+test("failed offer revision retains the explicit requested offer on retry", async () => {
+  const h = fixture(withOffer), id = randomUUID(); await h.workflow.generateCampaign(id, input);
+  const research = h.workflow.session.research!, product = research.products![0], photo = research.assets!.find(asset => asset.eligibleAsProductReference)!;
+  await h.workflow.confirmCampaignSetup(id, product.id, null, photo.id, null);
+  await h.reload().continueCampaign(id); await h.reload().continueCampaign(id);
+  const original = h.workflow.session.variants[0], changeId = randomUUID();
+  const long = "Offer terms that cannot possibly fit the ad canvas. ".repeat(40);
+  h.workflow.session.research!.offers![0].quote = long;
+  h.workflow.session.research!.sales[0].quote = long;
+  await h.workflow.changeAdOffer(changeId, original.id, "offer-1", true);
+  assert.equal(h.workflow.session.researchState?.generationIntent?.offerChange?.saleId, "offer-1");
+  assert.equal(publicSession(h.workflow.session).nextAction?.kind, "retry");
+  await h.reload().continueCampaign(changeId);
+  assert.equal(h.workflow.session.researchState?.generationIntent?.offerChange?.saleId, "offer-1");
+  assert.equal(h.workflow.session.brief, undefined);
+  assert.equal(h.workflow.session.variants.length, 1);
+});
 
 test("one explicit Generate persists intent through research and reload, then plans and generates once", async () => {
   const h = fixture(), requestId = randomUUID();
-  await h.workflow.generateCampaign(requestId, input);
+  await h.workflow.generateCampaign(requestId, input); await confirmReady(h.workflow, requestId);
   assert.equal(h.counts.research, 1); assert.equal(h.counts.draft, 0);
   assert.equal(researchStateSchema.parse(h.workflow.session.researchState).generationIntent?.requestId, requestId);
-  await h.workflow.generateCampaign(requestId, input); assert.equal(h.counts.research, 1);
+  await h.workflow.generateCampaign(requestId, input); await confirmReady(h.workflow, requestId); assert.equal(h.counts.research, 1);
   await h.reload().continueCampaign(requestId);
   assert.equal(h.workflow.session.brief?.approvalOrigin, "campaign_generate"); assert.equal(h.counts.scene, 0);
   await h.reload().continueCampaign(requestId);
@@ -57,13 +158,13 @@ test("legacy sessions and mismatched generation IDs cannot dispatch automaticall
   const h = fixture();
   assert.equal(publicSession(h.workflow.session).nextAction, undefined);
   await assert.rejects(h.workflow.continueCampaign(randomUUID()), /changed/);
-  const id = randomUUID(); await h.workflow.generateCampaign(id, input);
+  const id = randomUUID(); await h.workflow.generateCampaign(id, input); await confirmReady(h.workflow, id);
   await assert.rejects(h.workflow.generateCampaign(id, { direction: "Different" }), /another/);
   assert.equal(h.counts.scene, 0);
 });
 
 test("failed planning pauses for explicit retry and resumes without repeating research", async () => {
-  const h = fixture(), id = randomUUID(); await h.workflow.generateCampaign(id, input);
+  const h = fixture(), id = randomUUID(); await h.workflow.generateCampaign(id, input); await confirmReady(h.workflow, id);
   h.fail.draft = true; await h.reload().continueCampaign(id);
   assert.equal(publicSession(h.workflow.session).nextAction?.kind, "retry");
   h.fail.draft = false; await h.reload().continueCampaign(id);
@@ -72,7 +173,7 @@ test("failed planning pauses for explicit retry and resumes without repeating re
 });
 
 test("a bounded request defers before the paid scene and resumes in a fresh request", async () => {
-  const h = fixture(), id = randomUUID(); await h.workflow.generateCampaign(id, input); await h.reload().continueCampaign(id);
+  const h = fixture(), id = randomUUID(); await h.workflow.generateCampaign(id, input); await confirmReady(h.workflow, id); await h.reload().continueCampaign(id);
   h.fail.slow = true; await h.reload().continueCampaign(id);
   assert.equal(publicSession(h.workflow.session).nextAction?.kind, "continue");
   assert.equal(h.counts.scene, 0);
@@ -81,7 +182,7 @@ test("a bounded request defers before the paid scene and resumes in a fresh requ
 });
 
 test("unknown attempts need explicit duplicate-risk consent; manual retry retains content", async () => {
-  const h = fixture(), id = randomUUID(); await h.workflow.generateCampaign(id, input); await h.reload().continueCampaign(id);
+  const h = fixture(), id = randomUUID(); await h.workflow.generateCampaign(id, input); await confirmReady(h.workflow, id); await h.reload().continueCampaign(id);
   h.fail.scene = true; await h.reload().continueCampaign(id);
   const failed = structuredClone(h.workflow.session.brief!);
   const next = publicSession(h.workflow.session).nextAction!;
@@ -98,7 +199,7 @@ test("unknown attempts need explicit duplicate-risk consent; manual retry retain
 });
 
 test("review failure retains the finished ad for the user's decision", async () => {
-  const h = fixture(), id = randomUUID(); await h.workflow.generateCampaign(id, input);
+  const h = fixture(), id = randomUUID(); await h.workflow.generateCampaign(id, input); await confirmReady(h.workflow, id);
   await h.reload().continueCampaign(id); h.fail.review = true; await h.reload().continueCampaign(id);
   assert.equal(h.workflow.session.variants[0].status, "review_failed");
   assert.equal(publicSession(h.workflow.session).nextAction?.kind, "complete");
@@ -115,23 +216,33 @@ function twoProducts(research: Research) {
 
 test("multi-product Generate pauses for an explicit product choice and retains the whole campaign", async () => {
   const h = fixture(twoProducts), id = randomUUID();
-  await h.workflow.generateCampaign(id, input);
+  await h.workflow.generateCampaign(id, input); await confirmReady(h.workflow, id);
   assert.equal(h.workflow.session.researchState!.stage, "needs_selection");
   assert.equal(h.workflow.session.research!.campaign!.selectedProductId, null);
   assert.equal(publicSession(h.workflow.session).nextAction?.kind, "needs_input");
   assert.equal(h.counts.draft, 0);
   const first = h.workflow.session.research!.products![0];
-  await h.workflow.selectProduct(first.id);
+  await h.workflow.selectProduct(first.id); await confirmReady(h.workflow, id);
   assert.equal(h.workflow.session.researchState!.stage, "ready_for_brief");
   assert.equal(h.workflow.session.research!.campaign!.scope!.members.length, 2);
   await h.reload().continueCampaign(id); await h.reload().continueCampaign(id);
   const research = h.workflow.session.research!, next = research.products![1], second = randomUUID();
-  await h.workflow.generateCampaignMember(second, next.id, null);
-  await h.reload().continueCampaign(second);
+  await h.workflow.generateCampaignMember(second, next.id, null); await confirmReady(h.workflow, second);
+  await h.reload().continueCampaign(second); await h.reload().continueCampaign(second);
   assert.equal(h.workflow.session.variants.length, 2);
   assert.equal(h.workflow.session.variants[1].brief.productId, next.id);
   assert.equal(h.workflow.session.research!.campaign!.scope!.members.length, 2);
   assert.equal(h.counts.scene, 2);
+});
+
+test("a direction URL variant does not constrain another researched product", async () => {
+  const h = fixture(twoProducts), first = randomUUID();
+  await h.workflow.generateCampaign(first, { direction: "Promote https://store.example/products/case?variant=101" });
+  const research = h.workflow.session.research!, secondProduct = research.products![1];
+  const second = randomUUID(); await h.workflow.generateCampaignMember(second, secondProduct.id, null);
+  await confirmReady(h.workflow, second);
+  await h.reload().continueCampaign(second);
+  assert.equal(h.workflow.session.brief?.productId, secondProduct.id);
 });
 
 test("generic size/color variants require their exact photo and preserve explicit membership", async () => {
@@ -145,10 +256,10 @@ test("generic size/color variants require their exact photo and preserve explici
     research.campaign!.scope = createCampaignScope(research.products!, [{ productId: product.id, variantId: "small-red" }, { productId: product.id, variantId: "large-blue" }]);
     research.campaign!.selectedProductId = null; research.campaign!.status = "needs_selection";
   });
-  const id = randomUUID(); await h.workflow.generateCampaign(id, input);
+  const id = randomUUID(); await h.workflow.generateCampaign(id, input); await confirmReady(h.workflow, id);
   assert.equal(h.workflow.session.research!.campaign!.selectedProductId, null);
   assert.equal(publicSession(h.workflow.session).nextAction?.kind, "needs_input");
-  await h.workflow.selectCampaignMember(h.workflow.session.research!.products![0].id, "small-red");
+  await h.workflow.selectCampaignMember(h.workflow.session.research!.products![0].id, "small-red"); await confirmReady(h.workflow, id);
   assert.equal(h.workflow.session.research!.campaign!.selectedVariantId, "small-red");
   const productId = h.workflow.session.research!.products![0].id;
   await assert.rejects(h.workflow.setCampaignScope([{ productId, variantId: "invented" }]), /actual variant/);
@@ -158,7 +269,7 @@ test("generic size/color variants require their exact photo and preserve explici
 });
 
 test("inline feedback creates an immutable child and copy refinement reuses the paid scene", async () => {
-  const h = fixture(), id = randomUUID(); await h.workflow.generateCampaign(id, input); await h.reload().continueCampaign(id); await h.reload().continueCampaign(id);
+  const h = fixture(), id = randomUUID(); await h.workflow.generateCampaign(id, input); await confirmReady(h.workflow, id); await h.reload().continueCampaign(id); await h.reload().continueCampaign(id);
   const original = structuredClone(h.workflow.session.variants[0]), requestId = randomUUID();
   await h.workflow.refineAd(requestId, original.id, "Change the headline only");
   assert.deepEqual(h.workflow.session.brief!.executionPlan!.scene.action, "reuse");
@@ -171,7 +282,7 @@ test("inline feedback creates an immutable child and copy refinement reuses the 
 });
 
 test("explicit regenerate preserves copy and creates one fresh complete scene without a planning call", async () => {
-  const h = fixture(), id = randomUUID(); await h.workflow.generateCampaign(id, input); await h.reload().continueCampaign(id); await h.reload().continueCampaign(id);
+  const h = fixture(), id = randomUUID(); await h.workflow.generateCampaign(id, input); await confirmReady(h.workflow, id); await h.reload().continueCampaign(id); await h.reload().continueCampaign(id);
   const original = structuredClone(h.workflow.session.variants[0]), requestId = randomUUID(), drafts = h.counts.draft;
   await h.workflow.regenerateAd(requestId, original.id);
   assert.equal(h.workflow.session.brief!.headline, original.brief.headline);
@@ -185,7 +296,7 @@ test("explicit regenerate preserves copy and creates one fresh complete scene wi
 });
 
 test("human acceptance retains uncertain automated review and is revoked on a fresh review", async () => {
-  const h = fixture(), id = randomUUID(); await h.workflow.generateCampaign(id, input); await h.reload().continueCampaign(id); await h.reload().continueCampaign(id);
+  const h = fixture(), id = randomUUID(); await h.workflow.generateCampaign(id, input); await confirmReady(h.workflow, id); await h.reload().continueCampaign(id); await h.reload().continueCampaign(id);
   const variant = h.workflow.session.variants[0]; variant.status = "needs_human"; variant.review!.verdict = "needs_human";
   const review = structuredClone(variant.review); await h.workflow.approveVariant(variant.id);
   assert.equal(variant.status, "approved"); assert.deepEqual(variant.review, review); assert.equal(variant.acceptance!.reviewedAt, review!.createdAt);
@@ -200,8 +311,8 @@ test("human acceptance retains uncertain automated review and is revoked on a fr
 });
 
 test("refining an older ad keeps current membership, direction and compatible saved scene", async () => {
-  const h = fixture(twoProducts), id = randomUUID(); await h.workflow.generateCampaign(id, input);
-  await h.workflow.selectProduct(h.workflow.session.research!.products![0].id);
+  const h = fixture(twoProducts), id = randomUUID(); await h.workflow.generateCampaign(id, input); await confirmReady(h.workflow, id);
+  await h.workflow.selectProduct(h.workflow.session.research!.products![0].id); await confirmReady(h.workflow, id);
   await h.reload().continueCampaign(id); await h.reload().continueCampaign(id);
   const original = structuredClone(h.workflow.session.variants[0]), research = h.workflow.session.research!;
   await h.workflow.selectCampaignMember(research.products![1].id, null);
@@ -219,12 +330,27 @@ test("refining an older ad keeps current membership, direction and compatible sa
   await assert.rejects(h.workflow.refineAd(randomUUID(), original.id, "Another headline"), /no longer included/);
 });
 
+test("chat revision can replace an unconfirmed checkpoint without generating that product", async () => {
+  const h = fixture(twoProducts), first = randomUUID(); await h.workflow.generateCampaign(first, input);
+  const products = h.workflow.session.research!.products!;
+  await h.workflow.selectCampaignMember(products[0].id, null); await confirmReady(h.workflow, first);
+  await h.reload().continueCampaign(first); await h.reload().continueCampaign(first);
+  const original = h.workflow.session.variants[0], second = randomUUID();
+  await h.workflow.generateCampaignMember(second, products[1].id, null);
+  assert.equal(h.workflow.session.researchState?.generationIntent?.setupPending, true);
+  const sceneCount = h.counts.scene;
+  await h.workflow.prepareChatRevision({ ...original.brief, headline: "Another take", parentVariantId: original.id }, original.id);
+  assert.equal(h.workflow.session.researchState?.generationIntent, undefined);
+  assert.equal(h.workflow.session.brief?.parentVariantId, original.id);
+  assert.equal(h.counts.scene, sceneCount);
+});
+
 test("manual photo classification cannot replace missing Shopify ownership", async () => {
   const h = fixture(research => {
     twoProducts(research);
     for (const asset of research.assets!) asset.eligibleAsProductReference = false;
   });
-  const requestId = randomUUID(); await h.workflow.generateCampaign(requestId, input);
+  const requestId = randomUUID(); await h.workflow.generateCampaign(requestId, input); await confirmReady(h.workflow, requestId);
   assert.equal(publicSession(h.workflow.session).nextAction!.kind, "needs_input");
   const research = h.workflow.session.research!, product = research.products![0], asset = research.assets!.find(item => item.productIds.includes(product.id))!;
   await h.workflow.correctAsset(asset.id, "product_photo", product.id);
@@ -235,8 +361,8 @@ test("manual photo classification cannot replace missing Shopify ownership", asy
 });
 
 test("editing research or target cannot discard an unknown paid attempt and silently resubmit", async () => {
-  const h = fixture(twoProducts), id = randomUUID(); await h.workflow.generateCampaign(id, input);
-  await h.workflow.selectProduct(h.workflow.session.research!.products![0].id);
+  const h = fixture(twoProducts), id = randomUUID(); await h.workflow.generateCampaign(id, input); await confirmReady(h.workflow, id);
+  await h.workflow.selectProduct(h.workflow.session.research!.products![0].id); await confirmReady(h.workflow, id);
   await h.reload().continueCampaign(id);
   h.fail.scene = true; await h.reload().continueCampaign(id);
   const before = structuredClone(h.workflow.session), research = before.research!, member = research.campaign!.scope!.members[1], asset = research.assets!.find(item => item.productIds.includes(member.productId))!;
@@ -256,7 +382,7 @@ test("planning compacts an older Shopify source under a new immutable research I
     research.sources[0].rawHtml = "large storefront runtime".repeat(1000);
     research.sources[0].shopify = { url: "https://store.example/products/case.js", fetchedAt: "now", product: { id: 1, handle: "case", title: "Case", description: "Real case", options: ["Size"], variants: [{ id: 1, title: "Small", options: ["Small"], price: 999 }], images: source.images, unused: "runtime".repeat(1000) } };
   });
-  const id = randomUUID(); await h.workflow.generateCampaign(id, input);
+  const id = randomUUID(); await h.workflow.generateCampaign(id, input); await confirmReady(h.workflow, id);
   const original = structuredClone(h.workflow.session.research!); await h.reload().continueCampaign(id);
   const compact = h.workflow.session.research!;
   assert.notEqual(compact.id, original.id); assert.equal(compact.revision, original.revision! + 1);
@@ -269,7 +395,7 @@ test("planning compacts an older Shopify source under a new immutable research I
 });
 
 test("a failed pre-dispatch reservation does not become a paid unknown when the error is saved", async () => {
-  const h = fixture(), id = randomUUID(); await h.workflow.generateCampaign(id, input); await h.reload().continueCampaign(id);
+  const h = fixture(), id = randomUUID(); await h.workflow.generateCampaign(id, input); await confirmReady(h.workflow, id); await h.reload().continueCampaign(id);
   h.fail.reservation = true; await h.reload().continueCampaign(id);
   assert.equal(h.counts.scene, 0);
   const loaded = h.reload().session;

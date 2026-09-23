@@ -7,8 +7,11 @@ export const generationSourceSchema = z.union([
 export const generationIntentSchema = z.object({
   requestId: z.string().uuid(), source: generationSourceSchema, authorizedAt: z.string(),
   researchId: z.string().optional(), briefId: z.string().optional(),
+  setupPending: z.boolean().optional(),
+  setup: z.object({ referenceAssetId: z.string().min(1), saleId: z.string().min(1).nullable() }).optional(),
   previousRequestId: z.string().uuid().optional(),
   refinement: z.object({ variantId: z.string().min(1), feedback: z.string().trim().min(1).max(2000) }).optional(),
+  offerChange: z.object({ variantId: z.string().min(1), saleId: z.string().min(1).nullable() }).optional(),
   qualityGate: z.object({
     attempt: z.union([z.literal(1), z.literal(2)]),
     stage: z.enum(["generating", "reviewing", "refining", "passed", "failed", "review_failed"]),
@@ -23,6 +26,8 @@ const member = { productId: z.string().min(1), variantId: z.string().min(1).null
 export const setCampaignScopeActionSchema = z.object({ action: z.literal("setCampaignScope"), members: z.array(z.object(member)).min(1).max(200) });
 export const selectCampaignMemberActionSchema = z.object({ action: z.literal("selectCampaignMember"), ...member });
 export const generateCampaignMemberActionSchema = z.object({ action: z.literal("generateCampaignMember"), requestId: z.string().uuid(), ...member });
+export const confirmCampaignSetupActionSchema = z.object({ action: z.literal("confirmCampaignSetup"), requestId: z.string().uuid(), ...member, referenceAssetId: z.string().min(1), saleId: z.string().min(1).nullable(), confirmOffer: z.boolean().optional() });
+export const changeAdOfferActionSchema = z.object({ action: z.literal("changeAdOffer"), requestId: z.string().uuid(), variantId: z.string().min(1), saleId: z.string().min(1).nullable(), confirmOffer: z.boolean().optional() });
 export const refineAdActionSchema = z.object({ action: z.literal("refineAd"), requestId: z.string().uuid(), variantId: z.string().min(1), feedback: z.string().trim().min(1).max(2000) });
 export const regenerateAdActionSchema = z.object({ action: z.literal("regenerateAd"), requestId: z.string().uuid(), variantId: z.string().min(1) });
 export type GenerationSource = z.infer<typeof generationSourceSchema>;

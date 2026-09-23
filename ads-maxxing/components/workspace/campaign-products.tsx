@@ -7,7 +7,6 @@ import {
 } from "@/lib/workflow/research/scope";
 import { Badge, Button } from "./ui";
 
-const MAX_PRODUCT_CARDS = 4;
 
 function formatPrice(price: NonNullable<NonNullable<Research["products"]>[number]["price"]>) {
   try {
@@ -38,32 +37,29 @@ export function CampaignProducts({ research, busy, plan }: {
   const assets = research.assets || [];
   const selectedProductId = campaign?.selectedProductId;
   const includedProductIds = [...new Set(scope.members.map((member) => member.productId))];
-  const otherProducts = includedProductIds
-    .filter((productId) => productId !== selectedProductId)
+  const campaignProducts = includedProductIds
     .map((productId) => products.find((product) => product.id === productId))
-    .filter((product): product is NonNullable<typeof product> => !!product)
-    .slice(0, MAX_PRODUCT_CARDS);
+    .filter((product): product is NonNullable<typeof product> => !!product);
 
-  if (!otherProducts.length) return null;
+  if (!campaignProducts.length) return null;
 
   return (
     <section className="campaign-products" aria-labelledby="campaign-products-title">
       <div className="campaign-products-heading">
         <div>
-          <p className="eyebrow">KEEP EXPLORING</p>
-          <h2 id="campaign-products-title">Other products in this campaign</h2>
+          <p className="eyebrow">CAMPAIGN PRODUCTS</p>
+          <h2 id="campaign-products-title">Products in this campaign</h2>
           <p className="muted">
-            Pick another researched product, then give your creative partner a
-            more specific angle before making its ad.
+            Choose a researched product to create its next ad.
           </p>
         </div>
         <span className="small muted">
-          Showing {otherProducts.length} of {Math.max(0, includedProductIds.length - (selectedProductId ? 1 : 0))}
+          {campaignProducts.length} {campaignProducts.length === 1 ? "product" : "products"}
         </span>
       </div>
 
       <div className="campaign-product-grid">
-        {otherProducts.map((product) => {
+        {campaignProducts.map((product) => {
           const members = scope.members.filter((member) => member.productId === product.id);
           const readyMember = members.find((member) =>
             memberReferenceReadiness(member, products, assets).status === "ready"
@@ -97,6 +93,7 @@ export function CampaignProducts({ research, busy, plan }: {
                   {availability && <span>{availability}</span>}
                 </div>
                 <h3>{product.title}</h3>
+                {product.id === selectedProductId && <p className="small muted">Current product</p>}
                 <p className="small muted">
                   {optionCount
                     ? `${optionCount} campaign ${optionCount === 1 ? "option" : "options"}`
@@ -115,7 +112,7 @@ export function CampaignProducts({ research, busy, plan }: {
                     disabled={busy || readiness.status !== "ready"}
                     onClick={() => plan(member, product.title, option?.title)}
                   >
-                    Plan in chat →
+                    Choose product →
                   </Button>
                 </div>
               </div>

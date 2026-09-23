@@ -1,7 +1,7 @@
 import type { BriefInput } from "../schema";
 import type { Research } from "../session-types";
 import { WorkflowError } from "../validation";
-import { canonicalUrl } from "./extract";
+import { canonicalUrl, productIdentityUrl } from "./extract";
 import { scopeForCampaign } from "./scope";
 
 export function groundBrief(data: BriefInput, research: Research, resolveUrls = true) {
@@ -15,7 +15,7 @@ export function groundBrief(data: BriefInput, research: Research, resolveUrls = 
   if (!members.some(member => member.productId === product.id && (member.variantId === null || member.variantId === (data.variantId ?? null)))) throw new WorkflowError("This product or variant is outside the included campaign members.");
   if (research.campaign.selectedProductId !== product.id) throw new WorkflowError("Choose this product in the research panel before preparing its brief.");
   if (!asset.eligibleAsProductReference || !["product_photo", "product_lifestyle"].includes(asset.role) || !asset.productIds.includes(product.id) || !product.assetIds.includes(asset.id) || asset.classification !== "verified_structure") throw new WorkflowError("This image is not a Shopify-verified photo of the selected product. Choose a product with a valid Shopify gallery image.");
-  const suppliedVariant = research.campaign.direction.url ? new URL(research.campaign.direction.url).searchParams.get("variant") : null;
+  const suppliedVariant = research.campaign.direction.url && productIdentityUrl(research.campaign.direction.url) === productIdentityUrl(product.canonicalUrl) ? new URL(research.campaign.direction.url).searchParams.get("variant") : null;
   if (suppliedVariant && product.variants.find(variant => variant.storeId === suppliedVariant)?.id !== data.variantId) throw new WorkflowError("The supplied URL selects a specific variant. Choose its verified variant photo before preparing the brief.");
   if (data.variantId && (!product.variants.some(variant => variant.id === data.variantId) || !asset.variantIds.includes(data.variantId))) throw new WorkflowError("This photo does not establish the selected variant. Choose its verified photo or leave the variant unspecified.");
   if (data.logoAssetId) {
@@ -27,7 +27,7 @@ export function groundBrief(data: BriefInput, research: Research, resolveUrls = 
     const offer = research.offers?.find(offer => offer.id === data.saleId);
     if (!offer || offer.eligibility !== "eligible" || !offer.productIds.includes(product.id) || Date.now() - Date.parse(offer.checkedAt) > 86400000 || (offer.endsAt && Date.parse(offer.endsAt) <= Date.now())) throw new WorkflowError("This offer is stale or its eligibility is unresolved. Recheck its source and confirm full terms, or choose no offer.");
     const sale = research.sales.find(sale => sale.id === data.saleId);
-    if (!sale || sale.description !== offer.quote || canonicalUrl(sale.sourceUrl) !== canonicalUrl(offer.sourceUrl)) throw new WorkflowError("Offer terms no longer match the saved evidence.");
+    if (!sale || sale.quote !== offer.quote || canonicalUrl(sale.sourceUrl) !== canonicalUrl(offer.sourceUrl)) throw new WorkflowError("Offer terms no longer match the saved evidence.");
   }
   // Quantified/conditional claims belong to a complete evidence block, never free copy.
   if (/(?:\d\s*%|\b\d[\d,.]*\s*(?:customers|reviews|stars)|\b(?:free shipping|off everything|best.?seller|rated|first order|save\s+\$)|[$£€]\s*\d)/i.test(`${data.headline} ${data.cta}`)) throw new WorkflowError("Keep prices, discounts, ratings, and customer counts in a supported claim block. Use benefit-led headline and CTA copy.");

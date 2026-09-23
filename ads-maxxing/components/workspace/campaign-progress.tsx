@@ -14,7 +14,7 @@ export function CampaignProgress({ session, busy, error, recover, inspect, refre
   const [acknowledged, setAcknowledged] = useState(false);
   const next = session.nextAction;
   const needsInput = next?.kind === "needs_input";
-  const paused = !busy && (!!error || next?.kind === "retry" || needsInput);
+  const paused = needsInput || (!busy && (!!error || next?.kind === "retry"));
   const latest = session.events.at(-1);
   const phase = !session.brief
     ? session.researchState?.stage === "ready_for_brief" ? "Writing your ad" : "Finding products and photos"
@@ -27,7 +27,7 @@ export function CampaignProgress({ session, busy, error, recover, inspect, refre
         {!paused && <span className="pulse" aria-hidden="true" />}
         <div>
           <span className="eyebrow">{paused ? "YOUR PROGRESS IS SAVED" : "YOUR CREATIVE IS ON ITS WAY"}</span>
-          <h2>{needsInput ? "One detail to resolve" : paused ? "Let’s pick up from here" : phase}</h2>
+          <h2>{needsInput ? session.researchState?.generationIntent?.setupPending ? "Your product is ready to review" : "One detail to resolve" : paused ? "Let’s pick up from here" : phase}</h2>
         </div>
       </div>
       <p>{error || next?.message || "We’re using your brand research and real product photos. You can review the finished ad here."}</p>
@@ -41,7 +41,7 @@ export function CampaignProgress({ session, busy, error, recover, inspect, refre
       {!busy && (
         <div className="actions">
           {needsInput ? (
-            <Button primary onClick={inspect}>Review product details →</Button>
+            <Button primary onClick={inspect}>Review product & offer →</Button>
           ) : next?.kind === "retry" || next?.kind === "continue" ? (
             <Button primary disabled={!!next.duplicateRisk && !acknowledged} onClick={() => recover(acknowledged)}>
               {next?.kind === "retry" ? next.briefId ? "Retry image generation" : "Retry this step" : "Continue saved work"}

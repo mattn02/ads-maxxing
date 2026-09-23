@@ -12,8 +12,8 @@ function gatewayModel(model: string) {
   return createGateway({ apiKey })(model);
 }
 
-export function workflowModel(role: "concierge" | "researcher") {
-  const fallback = role === "researcher" ? RESEARCHER_MODEL : FREE_WORKFLOW_MODEL;
+export function workflowModel(role: "concierge" | "researcher" | "brief") {
+  const fallback = role === "concierge" ? FREE_WORKFLOW_MODEL : RESEARCHER_MODEL;
   return gatewayModel(process.env[`${role.toUpperCase()}_MODEL`] || fallback);
 }
 
