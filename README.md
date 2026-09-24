@@ -1,5 +1,15 @@
 # ads-maxxing
 
+<p align="center">
+  <img
+    width="300"
+    height="300"
+    alt="balloon-a"
+    src="https://github.com/user-attachments/assets/35c370cd-c6d7-44fd-98f7-66f8f0c94045"
+  />
+</p>
+
+
 ## Note from Matt
 I built ads-maxxing a marketing feature to allow advertisers to onboard onto advertising platforms quicker, by catching the vibe of your brand and generating creatives that vibe well & performs better in mobile advertising. All while still allowing you to take the driver seat whenever! I focused more on the functionality/capabilty of the platform/product in the perspective of a general marketer. This means ads-maxxing allows you to have multiple brands within your user identity, and each brand you are able to create & segment your creatives into multiple campaigns. This segmentation allows for more directed and targeted creatives; and being in the performance advertising industry, we know that quantity (while maintaining quality) scales well with performance.
 
