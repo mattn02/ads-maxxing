@@ -20,7 +20,7 @@ This was a great project to try out. Honestly speaking, this was my first time b
 
 ## Walkthrough
 
-- **Product walkthrough + examples**: https://www.loom.com/share/12d13b7d64d644ef82cd4eef1d6d0448 
-- **Reflection on the experience of building it**: https://www.loom.com/share/327ddd572c814c4cbf69d233cdd61bb5
+- **Product walkthrough + examples**: https://www.loom.com/share/327ddd572c814c4cbf69d233cdd61bb5
+- **Reflection on the experience of building it**: https://www.loom.com/share/12d13b7d64d644ef82cd4eef1d6d0448
 - **Excalidraw diagram**: https://excalidraw.com/#json=Y6RnRZ9-zHep8pEDYhp6l,lmDO-q955AFSC2RsNjbmXw
 
