@@ -34,25 +34,14 @@ const color = z.string().regex(/^#[0-9a-f]{6}$/i);
 const brandTokenColors = {
   background: color, foreground: color, accent: color, ctaForeground: color,
 };
-export const brandTokensSchema = z.discriminatedUnion("fontId", [
-  z.object({ ...brandTokenColors, fontId: z.literal("geist-fallback") }),
-  z.object({
-    ...brandTokenColors,
-    fontId: z.literal("fontsource"),
-    sourceId: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-    family: z.string().trim().min(1).max(200),
-    weight: z.literal(400),
-    style: z.literal("normal"),
-    format: z.enum(["ttf", "woff"]),
-    version: z.string().regex(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/),
-    fileUrl: z.string().url(),
-  }),
-]);
+export const brandTokensSchema = z.object({
+  ...brandTokenColors,
+  // Accept the legacy marker so saved briefs remain readable. All ads now use Geist.
+  fontId: z.enum(["geist-fallback", "fontsource"]),
+});
 export type BrandTokens = z.infer<typeof brandTokensSchema>;
-export function creativeFontFamily(tokens: BrandTokens) {
-  return tokens.fontId === "fontsource" ? tokens.family : "Geist";
-}
-export const RENDERER_VERSION = 7;
+export const CREATIVE_FONT_FAMILY = "Geist";
+export const RENDERER_VERSION = 8;
 export type VisualInputs = {
   researchId: string; productUrl: string; referenceImage: string; visualDirection: string;
   model: string; background: string; accent: string;

@@ -4,3 +4,9 @@
 local-output/
 coverage/
 *.tsbuildinfo
+
+docs/
+supabase/migrations/
+.codex-plugin/
+.code-plugin/
+.DS_Store

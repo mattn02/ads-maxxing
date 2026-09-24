@@ -18,7 +18,7 @@ async function main() {
   const logo = Buffer.from(await new ImageResponse(createElement("div", { style: { width: 120, height: 24, background: "#151515", color: "white", display: "flex", fontSize: 16 } }, "Fixture logo"), { width: 120, height: 24 }).arrayBuffer());
   const source: Source = { url: "https://fixture.example/product", images: ["https://fixture.example/photo.png"], title: "Fixture", description: "", markdown: "Members save 10%. Selected cases only. Ends Friday.", colors: {}, fetchedAt: "fixture" };
   const research = assembleResearch([source], { voice: "Fixture", audience: "Fixture", sales: [{ sourceUrl: source.url, quote: source.markdown, description: "Member offer" }] });
-  const resolvedTokens = await resolveBrandTokens(research);
+  const resolvedTokens = resolveBrandTokens(research);
   for (const template of ["copy-top", "photo-top"] as const) {
     for (const dark of [false, true]) {
       const brief: Brief = { id: randomUUID(), researchId: research.id, productUrl: source.url, referenceImage: source.images[0], headline: "Good grip. Great days. Your case, reimagined.", cta: "Find your favorite", direction: "Fixture", feedback: "", parentVariantId: null, saleId: research.sales[0].id,

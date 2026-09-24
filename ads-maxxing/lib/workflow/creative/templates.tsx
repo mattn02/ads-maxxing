@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element -- The server PNG renderer embeds saved bytes. */
 import React from "react";
-import { creativeFontFamily, templateGeometry, type BrandTokens, type DesignSpec, type VerifiedLogo } from "./schema";
+import { CREATIVE_FONT_FAMILY, templateGeometry, type BrandTokens, type DesignSpec, type VerifiedLogo } from "./schema";
 import type { CopyLayout, FittedText } from "./fit";
 import { textRuns } from "./emoji";
 
@@ -71,7 +71,7 @@ function CopyProtection({ copy, tokens, logoBytes }: TemplateProps) {
   </div>;
 }
 export function CreativeTemplate(props: TemplateProps) {
-  return <div style={{ display: "flex", position: "relative", width: 576, height: 1024, background: props.tokens.background, color: props.tokens.foreground, fontFamily: creativeFontFamily(props.tokens), fontWeight: 400 }}>
+  return <div style={{ display: "flex", position: "relative", width: 576, height: 1024, background: props.tokens.background, color: props.tokens.foreground, fontFamily: CREATIVE_FONT_FAMILY, fontWeight: 400 }}>
     <ProductVisual bytes={props.visualBytes} design={props.design} />
     <CopyProtection {...props} />
     <CopyGroup {...props} />

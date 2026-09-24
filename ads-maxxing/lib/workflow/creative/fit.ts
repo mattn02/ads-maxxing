@@ -1,7 +1,7 @@
 import { WorkflowError } from "../validation";
 import type { Brief, Research } from "../session-types";
 import { adCopySchema } from "../schema";
-import { brandTokensSchema, creativeFontFamily, designSchema, type BrandTokens } from "./schema";
+import { brandTokensSchema, CREATIVE_FONT_FAMILY, designSchema } from "./schema";
 import { emojiImages, graphemes, textRuns } from "./emoji";
 import { loadCreativeFont } from "./fonts";
 import { formatProductPrice, selectedProductPrice } from "../research/prices";
@@ -9,10 +9,10 @@ import { plainOffer } from "../research/offer-copy";
 
 class CopyFitError extends WorkflowError {}
 
-export async function creativeFont(tokens: BrandTokens) {
-  try { return await loadCreativeFont(tokens); }
+export async function creativeFont() {
+  try { return await loadCreativeFont(); }
   catch {
-    throw new WorkflowError(`The approved ${creativeFontFamily(tokens)} font could not be loaded or shaped. Any saved product scene is retained; use Finish saved creative to retry composition without generating a new scene.`, 502);
+    throw new WorkflowError(`The bundled ${CREATIVE_FONT_FAMILY} font could not be loaded or shaped. Any saved product scene is retained; use Finish saved creative to retry composition without generating a new scene.`, 502);
   }
 }
 export type FittedText = { lines: string[]; size: number; lineHeight: number; emojis: Record<string, string> };
@@ -59,15 +59,15 @@ export function resolveCommercialCopy(brief: Brief, research: Research) {
   };
 }
 
-async function fit(text: string, label: string, sizes: number[], width: number, height: number, maxLines: number, tokens: BrandTokens): Promise<FittedText> {
-  const { font } = await creativeFont(tokens);
+async function fit(text: string, label: string, sizes: number[], width: number, height: number, maxLines: number): Promise<FittedText> {
+  const { font } = await creativeFont();
   const emojis = await emojiImages(text);
   for (const glyph of graphemes(text)) {
     if (emojis[glyph]) continue;
     for (const char of glyph) {
       if (char === "\n") continue;
       if (/\p{C}/u.test(char) || !font.hasChar(char)) {
-        throw new CopyFitError(`${label} contains an unsupported character (${JSON.stringify(char)}). Use text supported by ${creativeFontFamily(tokens)} or an emoji available in the bundled Twemoji set.`);
+        throw new CopyFitError(`${label} contains an unsupported character (${JSON.stringify(char)}). Use text supported by ${CREATIVE_FONT_FAMILY} or an emoji available in the bundled Twemoji set.`);
       }
     }
   }
@@ -92,7 +92,7 @@ async function fit(text: string, label: string, sizes: number[], width: number, 
 }
 export async function generatedCopyErrors(brief: Pick<Brief, "headline" | "cta" | "design" | "tokens">): Promise<CopyValidationError[]> {
   const design = designSchema.parse(brief.design);
-  const tokens = brandTokensSchema.parse(brief.tokens);
+  brandTokensSchema.parse(brief.tokens);
   const parsed = adCopySchema.safeParse({ headline: brief.headline, cta: brief.cta });
   const errors: CopyValidationError[] = parsed.success ? [] : parsed.error.issues.flatMap(issue => {
     const field = issue.path[0];
@@ -102,8 +102,8 @@ export async function generatedCopyErrors(brief: Pick<Brief, "headline" | "cta" 
   for (const field of ["headline", "cta"] as const) {
     if (invalid.has(field)) continue;
     try {
-      if (field === "headline") await fit(brief.headline, "Headline", design.headlineStyle === "oversized" ? [60, 56, 52] : [48, 44, 40, 36], 512, 168, 3, tokens);
-      else await fit(brief.cta, "CTA", [24, 22, 20], 456, 32, 1, tokens);
+      if (field === "headline") await fit(brief.headline, "Headline", design.headlineStyle === "oversized" ? [60, 56, 52] : [48, 44, 40, 36], 512, 168, 3);
+      else await fit(brief.cta, "CTA", [24, 22, 20], 456, 32, 1);
     } catch (error) {
       if (!(error instanceof CopyFitError)) throw error;
       errors.push({ field, message: error instanceof Error ? error.message : `${field} is invalid.` });
@@ -113,14 +113,14 @@ export async function generatedCopyErrors(brief: Pick<Brief, "headline" | "cta" 
 }
 export async function validateCreative(brief: Brief, research: Research): Promise<CopyLayout> {
   const design = designSchema.parse(brief.design);
-  const tokens = brandTokensSchema.parse(brief.tokens);
+  brandTokensSchema.parse(brief.tokens);
   const commercial = resolveCommercialCopy(brief, research);
   const copyErrors = await generatedCopyErrors(brief);
   if (copyErrors.length) throw new WorkflowError(copyErrors.map(error => `${error.field}: ${error.message}`).join("; "));
   return {
-    headline: await fit(brief.headline, "Headline", design.headlineStyle === "oversized" ? [60, 56, 52] : [48, 44, 40, 36], 512, 168, 3, tokens),
-    cta: await fit(brief.cta, "CTA", [24, 22, 20], 456, 32, 1, tokens),
-    ...(commercial.price ? { price: await fit(commercial.price, "Price", [30, 28, 26, 24], 512, 34, 1, tokens) } : {}),
-    ...(commercial.offer ? { offer: await fit(commercial.offer, "Offer terms", [17, 16, 15, 14], 512, 54, 3, tokens) } : {}),
+    headline: await fit(brief.headline, "Headline", design.headlineStyle === "oversized" ? [60, 56, 52] : [48, 44, 40, 36], 512, 168, 3),
+    cta: await fit(brief.cta, "CTA", [24, 22, 20], 456, 32, 1),
+    ...(commercial.price ? { price: await fit(commercial.price, "Price", [30, 28, 26, 24], 512, 34, 1) } : {}),
+    ...(commercial.offer ? { offer: await fit(commercial.offer, "Offer terms", [17, 16, 15, 14], 512, 54, 3) } : {}),
   };
 }

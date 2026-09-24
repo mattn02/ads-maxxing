@@ -72,7 +72,7 @@ function brandKit(source: Source, findings: Findings, previous?: BrandKit): Bran
   const logos = extractSource(source).assets.filter(asset => asset.role === "logo").map(asset => asset.id);
   return { id: stableId("brand", storeHost(source.url)), revision: (previous?.revision || 0) + 1, canonicalStoreUrl: new URL("/", source.url).href, name: source.title.split(/\s[|–—]\s/)[0], logoAssetIds: logos, selectedLogoAssetId: previous?.selectedLogoAssetId && logos.includes(previous.selectedLogoAssetId) ? previous.selectedLogoAssetId : logos[0] || null,
     colors: Object.entries(source.colors).map(([role, value]) => ({ role, value, evidence: { ...evidence, quote: `${role}: ${value}` } })),
-    typography: { heading: finding(fonts.heading || typography.headingFont || typography.fontFamily), body: finding(fonts.body || fonts.primary || typography.bodyFont), renderFont: "geist-fallback", substitution: "Each ad uses an exact Fontsource match for the detected family when available, with bundled Geist as its saved fallback." },
+    typography: { heading: finding(fonts.heading || typography.headingFont || typography.fontFamily), body: finding(fonts.body || fonts.primary || typography.bodyFont), renderFont: "geist-fallback", substitution: "Ads use bundled Geist. Detected store fonts are retained as research metadata only." },
     voice: finding(findings.voice, true), audience: finding(findings.audience, true), valueProposition: finding(source.description), overrides: previous?.overrides || {} };
 }
 /** Bounded stages. A model can synthesize findings but cannot expand the selected scope. */

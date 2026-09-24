@@ -2,7 +2,7 @@
 import { useState } from "react";
 import {
   DEFAULT_DESIGN,
-  creativeFontFamily,
+  CREATIVE_FONT_FAMILY,
   executionSummary,
   type DesignSpec,
 } from "@/lib/workflow/creative/schema";
@@ -272,7 +272,7 @@ export function BriefEditor({
             </select>
             <p className="notice">{dirty ? "Save edits to see the updated generation plan before approving." : executionSummary(brief.executionPlan)}</p>
             {!dirty && brief.executionPlan && <p className="muted small">{Number(brief.executionPlan.scene.action === "generate")} image generation {brief.executionPlan.scene.action === "generate" ? "call" : "calls"} planned. Copy is rendered exactly after generation.</p>}
-            <p>Font: {draft.tokens ? creativeFontFamily(draft.tokens) : "resolved when this brief is saved"}. Color emojis use Twemoji.</p>
+            <p>Font: {CREATIVE_FONT_FAMILY}. Color emojis use Twemoji.</p>
           </fieldset>
 
           <label>Researched price</label>

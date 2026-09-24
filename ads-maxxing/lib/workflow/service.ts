@@ -454,7 +454,7 @@ export class Workflow {
     if (this.session.researchState?.stage === "awaiting_direction") throw new WorkflowError("Choose a direction before preparing a brief.", 409);
     groundBrief(data, research);
     if (data.parentVariantId && !this.session.variants.some(variant => variant.id === data.parentVariantId)) throw new WorkflowError("Parent variant not found.");
-    const tokens = retryFrom?.tokens ?? await resolveBrandTokens(research);
+    const tokens = retryFrom?.tokens ?? resolveBrandTokens(research);
     const next: Brief = { ...data, design: data.design ?? structuredClone(DEFAULT_DESIGN), tokens, id: randomUUID(), researchId: research.id, approvalOrigin, ...(retryFrom ? { retryOfBriefId: retryFrom.id } : {}) };
     await validateCreative(next, research);
     const parent = this.session.variants.find(variant => variant.id === next.parentVariantId);
